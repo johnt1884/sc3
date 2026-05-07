@@ -115,6 +115,31 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        #panel-add-dropdown {
+            display: none;
+            position: absolute;
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+            z-index: 1000;
+            width: calc(100% - 20px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .panel-dropdown-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #eee;
+        }
+        .panel-dropdown-item:hover {
+            background-color: #166fe5;
+        }
+        .panel-dropdown-separator {
+            height: 1px;
+            background-color: #444;
+            margin: 4px 0;
+        }
         #panel-resizer {
             display: none;
             width: 6px;
@@ -1004,7 +1029,9 @@
                 return;
             }
 
-            const [projectPath, videoName] = selectedVideoKey.split('|');
+            const parts = selectedVideoKey.split('|');
+            const projectPath = parts[0];
+            const videoName = parts[1];
             const videoCats = videoCategories.get(selectedVideoKey) || new Set();
             const projCats = projectCategories.get(projectPath) || new Set();
 
@@ -1015,79 +1042,101 @@
             header.textContent = videoName;
             panelContent.appendChild(header);
 
-            // New Category Creation
-            const newCatDiv = document.createElement('div');
-            newCatDiv.style.display = 'flex';
-            newCatDiv.style.flexDirection = 'column';
-            newCatDiv.style.gap = '5px';
-
-            const inputRow = document.createElement('div');
-            inputRow.style.display = 'flex';
-            inputRow.style.gap = '5px';
-
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.placeholder = 'New category...';
-            input.style.flexGrow = '1';
-            input.style.padding = '4px';
-            input.style.backgroundColor = '#333';
-            input.style.color = 'white';
-            input.style.border = '1px solid #555';
+            // Add Category UI
+            const addContainer = document.createElement('div');
+            addContainer.style.position = 'relative';
 
             const addBtn = document.createElement('button');
             addBtn.className = 'bar-button';
             addBtn.textContent = 'Add';
+            addBtn.style.width = '100%';
             addBtn.style.backgroundColor = '#43a047';
-            addBtn.onclick = () => {
-                const name = input.value.trim();
-                if (name) {
-                    toggleVideoCategory(name, true, selectedVideoKey, projectPath);
-                    renderCategoriesPanel();
-                }
-            };
 
-            inputRow.appendChild(input);
-            inputRow.appendChild(addBtn);
-            newCatDiv.appendChild(inputRow);
+            const dropdown = document.createElement('div');
+            dropdown.id = 'panel-add-dropdown';
 
-            // Dropdown for global categories
-            const globalCats = Array.from(globalSavedCategories).filter(cat => !projCats.has(cat)).sort();
-            if (globalCats.length > 0) {
-                const selectRow = document.createElement('div');
-                selectRow.style.display = 'flex';
-                selectRow.style.gap = '5px';
+            const showNewInput = () => {
+                dropdown.style.display = 'none';
+                const inputRow = document.createElement('div');
+                inputRow.style.display = 'flex';
+                inputRow.style.gap = '5px';
+                inputRow.style.marginTop = '5px';
 
-                const select = document.createElement('select');
-                select.style.flexGrow = '1';
-                select.style.height = '28px';
-                select.style.color = 'black';
-                select.style.backgroundColor = 'white';
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = 'New category...';
+                input.style.flexGrow = '1';
+                input.style.padding = '4px';
+                input.style.backgroundColor = '#333';
+                input.style.color = 'white';
+                input.style.border = '1px solid #555';
 
-                const defaultOpt = document.createElement('option');
-                defaultOpt.value = '';
-                defaultOpt.textContent = '-- Add Saved Category --';
-                select.appendChild(defaultOpt);
-
-                globalCats.forEach(cat => {
-                    const opt = document.createElement('option');
-                    opt.value = cat;
-                    opt.textContent = cat;
-                    select.appendChild(opt);
-                });
-
-                select.onchange = () => {
-                    if (select.value) {
-                        const cat = select.value;
-                        toggleVideoCategory(cat, true, selectedVideoKey, projectPath);
-                        renderCategoriesPanel();
+                const createBtn = document.createElement('button');
+                createBtn.className = 'bar-button';
+                createBtn.textContent = 'Create';
+                createBtn.style.backgroundColor = '#43a047';
+                createBtn.onclick = () => {
+                    const name = input.value.trim();
+                    if (name) {
+                        toggleVideoCategory(name, true, selectedVideoKey, projectPath);
                     }
                 };
 
-                selectRow.appendChild(select);
-                newCatDiv.appendChild(selectRow);
+                inputRow.appendChild(input);
+                inputRow.appendChild(createBtn);
+                addContainer.appendChild(inputRow);
+                input.focus();
+            };
+
+            const newItem = document.createElement('div');
+            newItem.className = 'panel-dropdown-item';
+            newItem.textContent = 'New';
+            newItem.onclick = (e) => {
+                e.stopPropagation();
+                showNewInput();
+            };
+            dropdown.appendChild(newItem);
+
+            const globalCats = Array.from(globalSavedCategories).filter(cat => !projCats.has(cat)).sort();
+            if (globalCats.length > 0) {
+                const sep = document.createElement('div');
+                sep.className = 'panel-dropdown-separator';
+                dropdown.appendChild(sep);
+
+                globalCats.forEach(cat => {
+                    const item = document.createElement('div');
+                    item.className = 'panel-dropdown-item';
+                    item.textContent = cat;
+                    item.onclick = (e) => {
+                        e.stopPropagation();
+                        // When adding a saved category to project, we also assign it to video
+                        toggleVideoCategory(cat, true, selectedVideoKey, projectPath);
+                        dropdown.style.display = 'none';
+                    };
+                    dropdown.appendChild(item);
+                });
             }
 
-            panelContent.appendChild(newCatDiv);
+            addBtn.onclick = (e) => {
+                e.stopPropagation();
+                const isVisible = dropdown.style.display === 'block';
+                // Close any existing inputs
+                const existingInput = addContainer.querySelector('div:not(#panel-add-dropdown)');
+                if (existingInput) existingInput.remove();
+
+                dropdown.style.display = isVisible ? 'none' : 'block';
+            };
+
+            // Global click to hide dropdown
+            const hideDropdown = () => {
+                dropdown.style.display = 'none';
+                window.removeEventListener('click', hideDropdown);
+            };
+            window.addEventListener('click', hideDropdown);
+
+            addContainer.appendChild(addBtn);
+            addContainer.appendChild(dropdown);
+            panelContent.appendChild(addContainer);
 
             // Categories List
             const listContainer = document.createElement('div');
@@ -1109,8 +1158,9 @@
                     cb.type = 'checkbox';
                     cb.id = `panel-cb-${cat}`;
                     cb.checked = videoCats.has(cat);
-                    cb.onchange = () => {
-                        toggleVideoCategory(cat, cb.checked, selectedVideoKey, projectPath);
+                    cb.onchange = (e) => {
+                        e.stopPropagation();
+                        toggleVideoCategory(cat, e.target.checked, selectedVideoKey, projectPath);
                     };
 
                     const label = document.createElement('label');
@@ -1279,11 +1329,17 @@
 
         function toggleVideoCategory(catName, isAdded, videoKey = null, projectPath = null) {
             const key = videoKey || selectedVideoKey;
-            const projPath = projectPath || (key ? key.split('|')[0] : null);
-            if (!key || !projPath) return;
+            if (!key) return;
+
+            let projPath = projectPath;
+            if (projPath === null || projPath === undefined) {
+                const parts = key.split('|');
+                projPath = parts.slice(0, -1).join('|');
+            }
 
             if (!videoCategories.has(key)) videoCategories.set(key, new Set());
             const cats = videoCategories.get(key);
+
             if (isAdded) {
                 cats.add(catName);
                 if (!projectCategories.has(projPath)) projectCategories.set(projPath, new Set());
@@ -1293,6 +1349,7 @@
             } else {
                 cats.delete(catName);
             }
+
             if (enableCategoriesPanelCheckbox.checked) {
                 renderCategoriesPanel();
             }
@@ -2059,6 +2116,12 @@
             if (canvas && canvas.elements) {
                 canvas.elements.forEach(el => {
                     thumbnailContainer.appendChild(el);
+                    // Update selection outline for rows if this canvas contains the selected video
+                    if (el.classList && el.classList.contains('landscape-row')) {
+                        const videoName = el.dataset.videoName;
+                        const projectPath = el.dataset.projectPath;
+                        updateRowUI(el, videoName, projectPath);
+                    }
                 });
             }
 
