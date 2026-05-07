@@ -930,7 +930,6 @@
         let initialVideoCategories = new Map(); // Key: projectPath + '|' + videoName, Value: Set of category names
         let projectCategories = new Map(); // Key: projectPath, Value: Set of category names
         let globalSavedCategories = new Set(JSON.parse(localStorage.getItem('globalSavedCategories') || '[]'));
-        let categoryCurrentVideo = null;
 
         const mainContainer = document.querySelector('.main-container');
         const showDatesCheckbox = document.getElementById('show-dates-checkbox');
@@ -1050,21 +1049,59 @@
             inputRow.appendChild(input);
             inputRow.appendChild(addBtn);
             newCatDiv.appendChild(inputRow);
+
+            // Dropdown for global categories
+            const globalCats = Array.from(globalSavedCategories).filter(cat => !projCats.has(cat)).sort();
+            if (globalCats.length > 0) {
+                const selectRow = document.createElement('div');
+                selectRow.style.display = 'flex';
+                selectRow.style.gap = '5px';
+
+                const select = document.createElement('select');
+                select.style.flexGrow = '1';
+                select.style.height = '28px';
+                select.style.color = 'black';
+                select.style.backgroundColor = 'white';
+
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = '-- Add Saved Category --';
+                select.appendChild(defaultOpt);
+
+                globalCats.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    select.appendChild(opt);
+                });
+
+                select.onchange = () => {
+                    if (select.value) {
+                        const cat = select.value;
+                        toggleVideoCategory(cat, true, selectedVideoKey, projectPath);
+                        renderCategoriesPanel();
+                    }
+                };
+
+                selectRow.appendChild(select);
+                newCatDiv.appendChild(selectRow);
+            }
+
             panelContent.appendChild(newCatDiv);
 
             // Categories List
             const listContainer = document.createElement('div');
             listContainer.className = 'panel-cat-list';
 
-            const allAvailableCats = Array.from(new Set([...projCats, ...globalSavedCategories])).sort();
-            if (allAvailableCats.length === 0) {
+            const allProjectCats = Array.from(projCats).sort();
+            if (allProjectCats.length === 0) {
                 const empty = document.createElement('div');
                 empty.style.color = '#888';
                 empty.style.fontSize = '12px';
-                empty.textContent = 'No categories available.';
+                empty.textContent = 'No categories in this project.';
                 listContainer.appendChild(empty);
             } else {
-                allAvailableCats.forEach(cat => {
+                allProjectCats.forEach(cat => {
                     const item = document.createElement('div');
                     item.className = 'panel-cat-item';
 
@@ -1239,58 +1276,10 @@
             editorScrubber.style.left = (p * 100) + '%';
         }
 
-        function renderCategories() {
-            categoriesList.innerHTML = '';
-            const projCats = projectCategories.get(categoryCurrentVideo.projectPath) || new Set();
-            const videoCats = videoCategories.get(categoryCurrentVideo.projectPath + '|' + categoryCurrentVideo.videoName) || new Set();
-
-            if (projCats.size === 0) {
-                categoriesList.innerHTML = '<div style="color: #888;">No categories yet.</div>';
-            } else {
-                Array.from(projCats).sort().forEach(cat => {
-                    const div = document.createElement('div');
-                    div.style.display = 'flex';
-                    div.style.alignItems = 'center';
-                    div.style.gap = '5px';
-                    div.style.padding = '2px 0';
-
-                    const cb = document.createElement('input');
-                    cb.type = 'checkbox';
-                    cb.id = `cat-cb-${cat}`;
-                    cb.checked = videoCats.has(cat);
-                    cb.onchange = () => {
-                        toggleVideoCategory(cat, cb.checked);
-                    };
-
-                    const lbl = document.createElement('label');
-                    lbl.htmlFor = `cat-cb-${cat}`;
-                    lbl.textContent = cat;
-                    lbl.style.cursor = 'pointer';
-
-                    div.appendChild(cb);
-                    div.appendChild(lbl);
-                    categoriesList.appendChild(div);
-                });
-            }
-
-            // Global categories dropdown
-            globalCategoriesDropdown.innerHTML = '<option value="">Select a saved category...</option>';
-            let hasNewGlobal = false;
-            Array.from(globalSavedCategories).sort().forEach(cat => {
-                if (!projCats.has(cat)) {
-                    const opt = document.createElement('option');
-                    opt.value = cat;
-                    opt.textContent = cat;
-                    globalCategoriesDropdown.appendChild(opt);
-                    hasNewGlobal = true;
-                }
-            });
-            globalCategoriesContainer.style.display = hasNewGlobal ? 'flex' : 'none';
-        }
 
         function toggleVideoCategory(catName, isAdded, videoKey = null, projectPath = null) {
-            const key = videoKey || (categoryCurrentVideo && (categoryCurrentVideo.projectPath + '|' + categoryCurrentVideo.videoName));
-            const projPath = projectPath || (categoryCurrentVideo && categoryCurrentVideo.projectPath);
+            const key = videoKey || selectedVideoKey;
+            const projPath = projectPath || (key ? key.split('|')[0] : null);
             if (!key || !projPath) return;
 
             if (!videoCategories.has(key)) videoCategories.set(key, new Set());
@@ -4043,7 +4032,7 @@
 
                         const rowDiv = document.createElement('div');
                         rowDiv.className = 'landscape-row';
-                        rowDiv.dataset.videoName = videoName;
+                        rowDiv.dataset.videoName = videoFile.name;
                         rowDiv.dataset.projectPath = project.path;
                         rowDiv.dataset.projectName = project.name;
 
@@ -4271,11 +4260,13 @@
                                 return aNum - bNum;
                             });
 
+                            let realVideoName = videoBaseName;
                             let videoDate = 'Unknown';
                             try {
                                 for await (const entry of subfolderHandle.values()) {
-                                    if (entry.kind === 'file' && entry.name.startsWith(videoBaseName)) {
+                                    if (entry.kind === 'file' && entry.name.toLowerCase().startsWith(videoBaseName.toLowerCase())) {
                                         const file = await entry.getFile();
+                                        realVideoName = file.name;
                                         videoDate = new Date(file.lastModified).toLocaleString();
                                         break;
                                     }
@@ -4284,7 +4275,7 @@
 
                             const rowDiv = document.createElement('div');
                             rowDiv.className = 'landscape-row';
-                            rowDiv.dataset.videoName = videoBaseName;
+                            rowDiv.dataset.videoName = realVideoName;
                             rowDiv.dataset.projectPath = subfolderName;
                             rowDiv.dataset.projectName = subfolderName;
 
@@ -4293,15 +4284,15 @@
                             dateInfo.textContent = `Created: ${videoDate}`;
                             rowDiv.appendChild(dateInfo);
 
-                            const rotData = projectRotationData.get(videoBaseName.toLowerCase()) || { rotation: "0", flipped: false };
+                            const rotData = projectRotationData.get(realVideoName.toLowerCase()) || { rotation: "0", flipped: false };
                             const rotation = rotData.rotation;
                             const flipped = rotData.flipped;
                             
                             if (rotation !== "0" || flipped) {
-                                const key = subfolderName + '|' + videoBaseName;
+                                const key = subfolderName + '|' + realVideoName;
                                 if (!shortcutSelections.has(key)) {
                                     shortcutSelections.set(key, {
-                                        videoName: videoBaseName,
+                                        videoName: realVideoName,
                                         projectPath: subfolderName,
                                         projectName: subfolderName,
                                         type: 'subfolder-sc', // default for sc-new
@@ -4316,7 +4307,7 @@
                                 }
                             }
 
-                            rowDiv.appendChild(createRowActionBar(videoBaseName, subfolderName, '', rowDiv, subfolderName));
+                            rowDiv.appendChild(createRowActionBar(realVideoName, subfolderName, '', rowDiv, subfolderName));
                             const thumbnailsContainer = document.createElement('div');
                             thumbnailsContainer.className = 'thumbnails-container';
                             rowDiv.appendChild(thumbnailsContainer);
