@@ -154,15 +154,10 @@
         #panel-resizer:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
-        .thumbnail-wrapper {
-            display: inline-block;
-            margin-right: 10px;
-            margin-bottom: 10px;
-            vertical-align: top;
-            position: relative;
-            overflow: hidden;
-        }
+
         .thumbnail {
+            max-width: 100%;
+            max-height: 100%;
             object-fit: cover;
             border-radius: 6px;
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -170,6 +165,18 @@
             position: relative;
             display: block;
             transform-origin: center center;
+            max-width: 100%;
+            max-height: 100%;
+        }
+        .thumbnail-wrapper {
+            display: inline-block;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            vertical-align: top;
+            position: relative;
+            overflow: hidden;
+            width: 320px; /* Fallback */
+            height: 180px; /* Fallback */
         }
         .thumbnail.rotate-90, .thumbnail.rotate-180, .thumbnail.rotate-270 {
             position: absolute;
@@ -1029,9 +1036,10 @@
                 return;
             }
 
-            const parts = selectedVideoKey.split('|');
-            const projectPath = parts[0];
-            const videoName = parts[1];
+            const lastPipe = selectedVideoKey.lastIndexOf('|');
+            const projectPath = lastPipe !== -1 ? selectedVideoKey.substring(0, lastPipe) : '';
+            const videoName = lastPipe !== -1 ? selectedVideoKey.substring(lastPipe + 1) : selectedVideoKey;
+
             const videoCats = videoCategories.get(selectedVideoKey) || new Set();
             const projCats = projectCategories.get(projectPath) || new Set();
 
@@ -1081,7 +1089,6 @@
                     const name = input.value.trim();
                     if (name) {
                         toggleVideoCategory(name, true, selectedVideoKey, projectPath);
-                        renderCategoriesPanel();
                     }
                 };
 
@@ -1115,7 +1122,6 @@
                         ev.stopPropagation();
                         toggleVideoCategory(cat, true, selectedVideoKey, projectPath);
                         dropdown.style.display = 'none';
-                        renderCategoriesPanel();
                     };
                     dropdown.appendChild(item);
                 });
@@ -1129,14 +1135,16 @@
                 dropdown.style.display = isVisible ? 'none' : 'block';
             };
 
-            const globalHideDropdown = (ev) => {
+            // Global click to hide dropdown
+            const hideDropdownHandler = (ev) => {
                 if (!addContainer.contains(ev.target)) {
                     dropdown.style.display = 'none';
                     const existingInput = addContainer.querySelector('.new-cat-input-row');
                     if (existingInput) existingInput.remove();
+                    window.removeEventListener('click', hideDropdownHandler);
                 }
             };
-            window.addEventListener('click', globalHideDropdown, { once: true });
+            window.addEventListener('click', hideDropdownHandler);
 
             addContainer.appendChild(addBtn);
             addContainer.appendChild(dropdown);
@@ -1179,6 +1187,7 @@
             }
             panelContent.appendChild(listContainer);
         }
+
 
         // Editor Helper Functions
         function editorTimeToFrame(time) {
@@ -1612,12 +1621,11 @@
 
                 const hasCuts = editorCurrentCuts.length > 0;
                 let markersChanged = editorMarkers.length > 0;
-                let finalRotation = initialRot;
-                let finalFlipped = editorCurrentAppliedFlip;
 
-                if (markersChanged) {
-                    const lastMarker = editorMarkers[editorMarkers.length - 1];
-                    finalRotation = lastMarker.rotation.toString();
+                // Determine final rotation from markers for processing
+                let finalRotation = initialRot;
+                if (editorMarkers.length > 0) {
+                    finalRotation = editorMarkers[editorMarkers.length - 1].rotation.toString();
                     if (editorMarkers.length === 1 && editorMarkers[0].frame === 0) {
                         if (finalRotation === initialRot) {
                             markersChanged = false;
@@ -1625,14 +1633,21 @@
                     }
                 }
 
-                // Goal: New commit entirely disregards/replaces the previous one.
+                let finalFlipped = editorCurrentAppliedFlip;
+
                 if (!selection) {
                     selection = {
                         videoName: editorCurrentVideo.videoName,
                         projectPath: editorCurrentVideo.projectPath,
                         subfolder: editorCurrentVideo.subfolder,
                         projectName: editorCurrentVideo.projectName,
-                        type: '', rotation: finalRotation, flipped: finalFlipped
+                        type: '',
+                        rotation: finalRotation,
+                        flipped: finalFlipped,
+                        visualRotation: initialRot,
+                        visualFlipped: initialFlipped,
+                        buttonRotationTouched: false,
+                        buttonFlipTouched: false
                     };
                     shortcutSelections.set(key, selection);
                 }
@@ -1642,10 +1657,9 @@
                 selection.rotation = finalRotation;
                 selection.flipped = finalFlipped;
                 selection.fps = editorEstimatedFPS;
-                // Edit mode hard-rotates, so we do not set buttonRotationTouched here
+                // We do NOT update visualRotation or buttonRotationTouched here
                 
-                // Track if it was rotated in edit mode in THIS session
-                // Red icon appears if it has markers or if rotation was changed from 0 in editor
+                // Red icon appears if it has markers (indicates hard-edits)
                 selection.editModeRotated = (editorMarkers.length > 0);
 
                 // Close editor
@@ -2184,8 +2198,9 @@
             const key = projectPath + '|' + videoName;
             const selection = shortcutSelections.get(key);
             const type = selection ? selection.type : '';
-            const rotation = selection ? selection.rotation : "0";
-            const flipped = selection ? !!selection.flipped : false;
+            // Bug fix: use visual state for thumbnails, separate from processing state
+            const rotation = (selection && selection.visualRotation !== undefined) ? selection.visualRotation : (selection ? selection.rotation : "0");
+            const flipped = (selection && selection.visualFlipped !== undefined) ? selection.visualFlipped : (selection ? !!selection.flipped : false);
 
             const actionBar = rowDiv.querySelector('.row-action-bar');
             if (actionBar) {
@@ -2222,6 +2237,21 @@
                     btn.classList.add('active');
                 }
             });
+
+            // Update red rotation icon
+            const nameSpan = rowDiv.querySelector('.row-video-name');
+            if (nameSpan) {
+                const existingIcon = nameSpan.querySelector('.red-rotation-icon');
+                const isEditRotated = editModeRotatedVideos.get(key) || (selection && selection.editModeRotated);
+                if (isEditRotated && !existingIcon) {
+                    const icon = document.createElement('span');
+                    icon.className = 'red-rotation-icon';
+                    icon.innerHTML = '&#10227;';
+                    nameSpan.insertBefore(icon, nameSpan.firstChild);
+                } else if (!isEditRotated && existingIcon) {
+                    existingIcon.remove();
+                }
+            }
 
             debouncedLayout();
         }
@@ -2262,12 +2292,21 @@
             const rotate = (delta) => {
                 let selection = shortcutSelections.get(key);
                 if (!selection) {
-                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0" };
+                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0", visualRotation: "0", visualFlipped: false };
                     shortcutSelections.set(key, selection);
                 }
+                if (selection.visualRotation === undefined) selection.visualRotation = selection.rotation || "0";
+
+                // Update processing state
                 let currentRot = parseInt(selection.rotation || "0");
                 let newRot = (currentRot + delta + 360) % 360;
                 selection.rotation = newRot.toString();
+
+                // Update visual state
+                let currentVisualRot = parseInt(selection.visualRotation || "0");
+                let newVisualRot = (currentVisualRot + delta + 360) % 360;
+                selection.visualRotation = newVisualRot.toString();
+
                 selection.buttonRotationTouched = true;
                 updateRowUI(rowDiv, videoName, projectPath);
             };
@@ -2298,11 +2337,13 @@
             const toggleFlip = () => {
                 let selection = shortcutSelections.get(key);
                 if (!selection) {
-                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0", flipped: false };
+                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0", flipped: false, visualRotation: "0", visualFlipped: false };
                     shortcutSelections.set(key, selection);
                 }
+                if (selection.visualFlipped === undefined) selection.visualFlipped = !!selection.flipped;
+
                 selection.flipped = !selection.flipped;
-                updateRowUI(rowDiv, videoName, projectPath);
+                selection.visualFlipped = !selection.visualFlipped; selection.buttonFlipTouched = true; updateRowUI(rowDiv, videoName, projectPath);
             };
             leftGroup.appendChild(createBtn('H Flip', toggleFlip));
 
@@ -2509,9 +2550,12 @@
 
             if (isAuto) {
                 const firstThumb = document.querySelector('.thumbnail[data-original-width]');
-                const ow = firstThumb ? parseFloat(firstThumb.dataset.originalWidth) : 320;
-                const oh = firstThumb ? parseFloat(firstThumb.dataset.originalHeight) : 180;
-                const isRot90 = firstThumb ? (firstThumb.classList.contains('rotate-90') || firstThumb.classList.contains('rotate-270')) : false;
+                let ow = 320, oh = 180, isRot90 = false;
+                if (firstThumb) {
+                    ow = parseFloat(firstThumb.dataset.originalWidth) || 320;
+                    oh = parseFloat(firstThumb.dataset.originalHeight) || 180;
+                    isRot90 = firstThumb.classList.contains('rotate-90') || firstThumb.classList.contains('rotate-270');
+                }
                 const refW = isRot90 ? oh : ow;
 
                 // Available width for content inside thumbnails-container
@@ -2538,10 +2582,8 @@
                     const wrappers = element.querySelectorAll('.thumbnail-wrapper');
                     wrappers.forEach(wrapper => {
                         const thumb = wrapper.querySelector('.thumbnail');
-                        if (!thumb.dataset.originalWidth) return;
-                        
-                        const originalWidth = parseFloat(thumb.dataset.originalWidth);
-                        const originalHeight = parseFloat(thumb.dataset.originalHeight);
+                        const originalWidth = parseFloat(thumb.dataset.originalWidth) || 320;
+                        const originalHeight = parseFloat(thumb.dataset.originalHeight) || 180;
                         const scaledWidth = originalWidth * globalScale;
                         const scaledHeight = originalHeight * globalScale;
                         
@@ -3277,29 +3319,44 @@
                 const initial = initialShortcutSelections.get(key);
                 const isMoved = sel.targetProject && sel.targetProject !== sel.projectPath;
                 
-                const currentRot = sel.rotation || "0";
                 const initialRot = (initial && initial.rotation) || "0";
-                const currentFlipped = !!sel.flipped;
                 const initialFlipped = initial ? !!initial.flipped : false;
+
+                const hasCuts = sel.cuts && sel.cuts.length > 0;
+                let markersChanged = sel.markers && sel.markers.length > 0;
+                if (markersChanged && sel.markers.length === 1 && sel.markers[0].frame === 0) {
+                    if (sel.markers[0].rotation.toString() === initialRot) markersChanged = false;
+                }
+                const needsProcessing = hasCuts || markersChanged;
+
+                // For rotation_data.txt:
+                // If it's being processed (FFmpeg), the output file is upright (0 rotation)
+                // Otherwise, use rotation only if user touched toolbar buttons
+                let rotationToSave = initialRot;
+                let flipToSave = initialFlipped;
+
+                if (needsProcessing) {
+                    rotationToSave = "0";
+                    flipToSave = false;
+                } else {
+                    if (sel.buttonRotationTouched) rotationToSave = sel.rotation || "0";
+                    if (sel.buttonFlipTouched) flipToSave = !!sel.flipped;
+                }
 
                 const getVal = (r, f) => (f ? `${r}:flip` : r);
 
                 if (isMoved) {
-                    // Remove from source
                     getUpdate(sel.projectPath).toRemove.push(sel.videoName);
-                    // Add/Update in destination
-                    const rotationVal = getVal(currentRot, currentFlipped);
-                    if (rotationVal !== "0") {
-                        getUpdate(sel.targetProject).toAdd[sel.videoName] = rotationVal;
-                    }
+                    const val = getVal(rotationToSave, flipToSave);
+                    if (val !== "0") getUpdate(sel.targetProject).toAdd[sel.videoName] = val;
                 } else {
-                    // Not moved, check if rotation or flip changed
-                    if (currentRot !== initialRot || currentFlipped !== initialFlipped) {
-                        const rotationVal = getVal(currentRot, currentFlipped);
-                        if (rotationVal === "0") {
+                    const val = getVal(rotationToSave, flipToSave);
+                    const initialVal = getVal(initialRot, initialFlipped);
+                    if (val !== initialVal) {
+                        if (val === "0") {
                             getUpdate(sel.projectPath).toRemove.push(sel.videoName);
                         } else {
-                            getUpdate(sel.projectPath).toAdd[sel.videoName] = rotationVal;
+                            getUpdate(sel.projectPath).toAdd[sel.videoName] = val;
                         }
                     }
                 }
@@ -3404,14 +3461,21 @@
                 scriptLines.push('\$script:rotatedFiles = @{}');
                     
                 shortcutSelections.forEach((sel, key) => {
-                        const initial = initialShortcutSelections.get(key);
-                        const initialRot = (initial && initial.rotation) || "0";
+                    const initial = initialShortcutSelections.get(key);
+                    const initialRot = (initial && initial.rotation) || "0";
+
+                    const hasCuts = sel.cuts && sel.cuts.length > 0;
+                    let markersChanged = sel.markers && sel.markers.length > 0;
+                    if (markersChanged && sel.markers.length === 1 && sel.markers[0].frame === 0) {
+                        if (sel.markers[0].rotation.toString() === initialRot) markersChanged = false;
+                    }
+                    const needsProcessing = hasCuts || markersChanged;
+
+                    // Only include in Lua if button-touched AND not being hard-rotated
+                    if (sel.buttonRotationTouched && !needsProcessing) {
                         const currentRot = sel.rotation || "0";
-                        if (sel.buttonRotationTouched) {
-                            summaryActions.lua.push(`${sel.videoName}: Rotate ${initialRot}° -> ${currentRot}°`);
-                        }
-                        if (sel.buttonRotationTouched) {
-                            scriptLines.push(`\$script:rotatedFiles['${escapePSString(sel.videoName)}'] = ${currentRot}`);
+                        summaryActions.lua.push(`${sel.videoName}: Rotate ${initialRot}° -> ${currentRot}°`);
+                        scriptLines.push(`$script:rotatedFiles['${escapePSString(sel.videoName)}'] = ${currentRot}`);
                     }
                 });
 
@@ -3463,7 +3527,7 @@
                 const hasFlipChanges = Array.from(shortcutSelections.entries()).some(([key, sel]) => {
                     const initial = initialShortcutSelections.get(key);
                     const initialFlipped = initial ? !!initial.flipped : false;
-                    return !!sel.flipped !== initialFlipped;
+                    return sel.buttonFlipTouched;
                 });
 
                 if (hasFlipChanges || Array.from(shortcutSelections.values()).some(sel => sel.flipped)) {
@@ -3471,15 +3535,24 @@
                 scriptLines.push("\$flipLuaPath = 'C:\\Bridge\\misc\\tools\\mpv-x86_64-v3-20260418-git-4377cce\\portable_config\\scripts\\flip.lua'");
                 scriptLines.push('\$script:flippedFiles = @{}');
                     
-                    shortcutSelections.forEach((sel, key) => {
-                        const initial = initialShortcutSelections.get(key);
-                        const initialFlipped = initial ? !!initial.flipped : false;
-                        if (!!sel.flipped !== initialFlipped) {
-                            summaryActions.lua.push(`${sel.videoName}: H-Flip ${initialFlipped ? 'ON' : 'OFF'} -> ${sel.flipped ? 'ON' : 'OFF'}`);
-                        }
+                shortcutSelections.forEach((sel, key) => {
+                    const initial = initialShortcutSelections.get(key);
+                    const initialRot = (initial && initial.rotation) || "0";
+                    const initialFlipped = initial ? !!initial.flipped : false;
+
+                    const hasCuts = sel.cuts && sel.cuts.length > 0;
+                    let markersChanged = sel.markers && sel.markers.length > 0;
+                    if (markersChanged && sel.markers.length === 1 && sel.markers[0].frame === 0) {
+                        if (sel.markers[0].rotation.toString() === initialRot) markersChanged = false;
+                    }
+                    const needsProcessing = hasCuts || markersChanged;
+
+                    if (sel.buttonFlipTouched && !needsProcessing) {
+                        summaryActions.lua.push(`${sel.videoName}: H-Flip ${initialFlipped ? 'ON' : 'OFF'} -> ${sel.flipped ? 'ON' : 'OFF'}`);
                         if (sel.flipped) {
                             scriptLines.push(`\$script:flippedFiles['${escapePSString(sel.videoName)}'] = 'hflip'`);
                         }
+                    }
                 });
 
                 scriptLines.push('\$allFlips = @{}');
@@ -4185,7 +4258,7 @@
                                 videoName: videoFile.name, projectPath: project.path, subfolder: videoFile.subfolder,
                                 projectName: project.name,
                                 type: initialShortcutType || '', rotation: rotation, flipped: flipped,
-                                buttonRotationTouched: false
+                                visualRotation: rotation, visualFlipped: flipped, buttonRotationTouched: false, buttonFlipTouched: false, buttonFlipTouched: false
                             };
                             shortcutSelections.set(key, selectionData);
                             initialShortcutSelections.set(key, { 
@@ -4223,8 +4296,8 @@
                             e.stopPropagation();
                             const key = project.path + '|' + videoFile.name;
                             const selection = shortcutSelections.get(key);
-                            const activeRotation = (selection && selection.rotation) ? selection.rotation : rotation;
-                            const activeFlipped = (selection && selection.flipped) ? selection.flipped : false;
+                            const activeRotation = (selection && selection.visualRotation !== undefined) ? selection.visualRotation : (selection ? selection.rotation : rotation);
+                            const activeFlipped = (selection && selection.visualFlipped !== undefined) ? selection.visualFlipped : (selection ? !!selection.flipped : false);
                             playVideo(videoFile, activeRotation, activeFlipped);
                         });
 
@@ -4368,7 +4441,7 @@
                                         type: 'subfolder-sc', // default for sc-new
                                         rotation: rotation,
                                         flipped: flipped,
-                                        buttonRotationTouched: false
+                                        visualRotation: rotation, visualFlipped: flipped, buttonRotationTouched: false, buttonFlipTouched: false, buttonFlipTouched: false
                                     });
                                     initialShortcutSelections.set(key, { 
                                         type: 'subfolder-sc', rotation: rotation, flipped: flipped, 
@@ -4423,8 +4496,8 @@
                                     if (videoFile) {
                                         const key = subfolderName + '|' + videoBaseName;
                                         const selection = shortcutSelections.get(key);
-                                        const activeRotation = (selection && selection.rotation) ? selection.rotation : rotation;
-                                        const activeFlipped = (selection && selection.flipped) ? selection.flipped : false;
+                                        const activeRotation = (selection && selection.visualRotation !== undefined) ? selection.visualRotation : (selection ? selection.rotation : rotation);
+                                        const activeFlipped = (selection && selection.visualFlipped !== undefined) ? selection.visualFlipped : (selection ? !!selection.flipped : false);
                                         playVideo(videoFile, activeRotation, activeFlipped);
                                     }
                                 });
@@ -4701,8 +4774,8 @@
 
                             img.addEventListener('click', (e) => {
                                 e.stopPropagation();
-                                const activeRotation = (selection && selection.rotation) ? selection.rotation : "0";
-                                const activeFlipped = (selection && selection.flipped) ? selection.flipped : false;
+                                const activeRotation = (selection && selection.visualRotation !== undefined) ? selection.visualRotation : (selection ? selection.rotation : "0");
+                                const activeFlipped = (selection && selection.visualFlipped !== undefined) ? selection.visualFlipped : (selection ? !!selection.flipped : false);
                                 playVideo(videoFile, activeRotation, activeFlipped);
                             });
 
@@ -4878,7 +4951,17 @@
                     const escapedProjectPath = escapePSString(sel.projectPath);
                     const escapedSubfolder = escapePSString(sel.subfolder);
                     const multiplier = sel.multiplier || 1;
-                    const rotation = (sel.buttonRotationTouched && sel.rotation) ? sel.rotation : "0";
+
+                    const initial = initialShortcutSelections.get(sel.projectPath + '|' + sel.videoName);
+                    const initialRot = (initial && initial.rotation) || "0";
+                    const hasCuts = sel.cuts && sel.cuts.length > 0;
+                    let markersChanged = sel.markers && sel.markers.length > 0;
+                    if (markersChanged && sel.markers.length === 1 && sel.markers[0].frame === 0) {
+                        if (sel.markers[0].rotation.toString() === initialRot) markersChanged = false;
+                    }
+                    const needsProcessing = hasCuts || markersChanged;
+
+                    const rotation = (sel.buttonRotationTouched && !needsProcessing) ? (sel.rotation || "0") : "0";
 
                     if (currentMode === 'update-playlist-root') {
                         summaryActions.shortcuts_verify.push(`${sel.videoName} (for Playlist)`);
