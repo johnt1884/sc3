@@ -17,6 +17,7 @@
             --row-number-color: #fcfc01;
             --date-text-color: #01ffff;
             --playlist-sc-color: #ff00ff;
+            --selected-cat-color: #ff0000;
         }
         html, body {
             height: 100%;
@@ -69,7 +70,7 @@
         #categories-panel {
             display: none;
             width: 250px;
-            min-width: 100px;
+            min-width: 150px;
             max-width: 600px;
             background-color: var(--toolbar-color);
             border-left: 1px solid #444;
@@ -77,39 +78,67 @@
             overflow-x: hidden;
             position: relative;
             flex-shrink: 0;
+            padding: 10px;
+            box-sizing: border-box;
         }
         #panel-content {
             height: 100%;
-            overflow-y: scroll;
+            overflow-y: auto;
             overflow-x: hidden;
-            scrollbar-width: none; /* Firefox */
-        }
-        #panel-content::-webkit-scrollbar {
-            display: none; /* Chrome/Safari */
-        }
-        .panel-row {
-            border-bottom: 1px solid #444;
-            box-sizing: border-box;
             display: flex;
             flex-direction: column;
-            padding: 5px;
-            overflow: hidden;
+            gap: 15px;
         }
-        .panel-video-cats {
-            flex-grow: 1;
-            overflow-y: auto;
-            font-size: 12px;
-            color: #eee;
+        .panel-section-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--header-text-color);
+        }
+        .panel-cat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
         .panel-cat-item {
             display: flex;
             align-items: center;
-            gap: 5px;
-            padding: 2px 0;
-            white-space: nowrap;
+            gap: 8px;
+            font-size: 13px;
         }
         .panel-cat-item input {
             margin: 0;
+        }
+        .panel-cat-item label {
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #panel-add-dropdown {
+            display: none;
+            position: absolute;
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+            z-index: 1000;
+            width: calc(100% - 20px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .panel-dropdown-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #eee;
+        }
+        .panel-dropdown-item:hover {
+            background-color: #166fe5;
+        }
+        .panel-dropdown-separator {
+            height: 1px;
+            background-color: #444;
+            margin: 4px 0;
         }
         #panel-resizer {
             display: none;
@@ -125,15 +154,10 @@
         #panel-resizer:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
-        .thumbnail-wrapper {
-            display: inline-block;
-            margin-right: 10px;
-            margin-bottom: 10px;
-            vertical-align: top;
-            position: relative;
-            overflow: hidden;
-        }
+
         .thumbnail {
+            max-width: 100%;
+            max-height: 100%;
             object-fit: cover;
             border-radius: 6px;
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -141,6 +165,18 @@
             position: relative;
             display: block;
             transform-origin: center center;
+            max-width: 100%;
+            max-height: 100%;
+        }
+        .thumbnail-wrapper {
+            display: inline-block;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            vertical-align: top;
+            position: relative;
+            overflow: hidden;
+            width: 320px; /* Fallback */
+            height: 180px; /* Fallback */
         }
         .thumbnail.rotate-90, .thumbnail.rotate-180, .thumbnail.rotate-270 {
             position: absolute;
@@ -245,6 +281,10 @@
             box-sizing: border-box;
             border-bottom: 1px solid #444444;
             border-top: 1px solid #444444;
+        }
+        .row-action-bar.selected-for-categories {
+            outline: 3px solid var(--selected-cat-color);
+            outline-offset: -3px;
         }
         .row-action-group-left {
             display: flex;
@@ -685,6 +725,10 @@
                                 <input type="color" id="playlist-sc-color-picker" value="#ff00ff">
                             </div>
                             <div class="options-row">
+                                <label for="selected-cat-color-picker">Category Selection Outline</label>
+                                <input type="color" id="selected-cat-color-picker" value="#ff0000">
+                            </div>
+                            <div class="options-row">
                                 <label for="enable-categories-panel-checkbox">Enable Categories Panel</label>
                                 <input type="checkbox" id="enable-categories-panel-checkbox">
                             </div>
@@ -815,34 +859,9 @@
         </div>
     </div>
 
-    <div id="categories-modal" class="modal">
-        <div class="modal-content">
-            <span class="close" id="close-categories-modal">&times;</span>
-            <h2>Categories</h2>
-            <div id="categories-list" style="margin-bottom: 20px; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
-                <!-- Category checkboxes will go here -->
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-                <input type="text" id="new-category-input" placeholder="New Category Name" style="flex-grow: 1; padding: 5px;">
-                <button id="add-category-btn" class="bar-button" style="background-color: #43a047;">Create & Add</button>
-            </div>
-            <div id="global-categories-container" style="display: none; align-items: center; gap: 10px;">
-                <label for="global-categories-dropdown">Saved Categories:</label>
-                <select id="global-categories-dropdown" style="flex-grow: 1; color: black; background-color: white; border: 1px solid #ccc;">
-                    <option value="">Select a saved category...</option>
-                </select>
-                <button id="add-global-category-btn" class="bar-button">Add</button>
-            </div>
-        </div>
-    </div>
 
     <script>
         const thumbnailContainer = document.getElementById('thumbnail-container');
-        thumbnailContainer.addEventListener('scroll', () => {
-            if (enableCategoriesPanelCheckbox.checked) {
-                panelContent.scrollTop = thumbnailContainer.scrollTop;
-            }
-        });
         const scriptModal = document.getElementById('script-modal');
         const batchScriptTextArea = document.getElementById('batch-script');
         const copyScriptBtn = document.getElementById('copy-script-btn');
@@ -894,14 +913,7 @@
         const editorRotRightBtn = document.getElementById('editor-rotRight');
         const editorVideoOverlay = document.getElementById('editor-videoOverlay');
         const editorFileInfo = document.getElementById('editor-fileInfo');
-        const categoriesModal = document.getElementById('categories-modal');
-        const closeCategoriesModal = document.getElementById('close-categories-modal');
-        const categoriesList = document.getElementById('categories-list');
-        const newCategoryInput = document.getElementById('new-category-input');
-        const addCategoryBtn = document.getElementById('add-category-btn');
-        const globalCategoriesContainer = document.getElementById('global-categories-container');
-        const globalCategoriesDropdown = document.getElementById('global-categories-dropdown');
-        const addGlobalCategoryBtn = document.getElementById('add-global-category-btn');
+        let selectedVideoKey = null;
 
         const prevCanvasBtn = document.getElementById('prev-canvas-btn');
         const nextCanvasBtn = document.getElementById('next-canvas-btn');
@@ -950,7 +962,6 @@
         let initialVideoCategories = new Map(); // Key: projectPath + '|' + videoName, Value: Set of category names
         let projectCategories = new Map(); // Key: projectPath, Value: Set of category names
         let globalSavedCategories = new Set(JSON.parse(localStorage.getItem('globalSavedCategories') || '[]'));
-        let categoryCurrentVideo = null;
 
         const mainContainer = document.querySelector('.main-container');
         const showDatesCheckbox = document.getElementById('show-dates-checkbox');
@@ -1020,75 +1031,163 @@
             if (!enableCategoriesPanelCheckbox.checked) return;
             panelContent.innerHTML = '';
             
-            if (!canvases.has(activeCanvasId)) return;
-            const canvas = canvases.get(activeCanvasId);
-            const projectPath = canvas.path;
-            
-            // Get all in-play categories for this directory
-            const inPlayCats = new Set();
-            const projectVideos = allVideoFiles.filter(v => v.projectPath === projectPath);
-            projectVideos.forEach(v => {
-                const cats = videoCategories.get(projectPath + '|' + v.name);
-                if (cats) cats.forEach(c => inPlayCats.add(c));
-            });
-            const sortedInPlay = Array.from(inPlayCats).sort();
+            if (!selectedVideoKey) {
+                panelContent.innerHTML = '<div style="color: #888; text-align: center; margin-top: 20px;">Click a video\'s category icon to select it.</div>';
+                return;
+            }
 
-            const rows = document.querySelectorAll('.landscape-row');
-            rows.forEach(row => {
-                const videoName = row.dataset.videoName;
-                const projPath = row.dataset.projectPath;
-                const videoKey = projPath + '|' + videoName;
-                const videoCats = videoCategories.get(videoKey) || new Set();
+            const lastPipe = selectedVideoKey.lastIndexOf('|');
+            const projectPath = lastPipe !== -1 ? selectedVideoKey.substring(0, lastPipe) : '';
+            const videoName = lastPipe !== -1 ? selectedVideoKey.substring(lastPipe + 1) : selectedVideoKey;
 
-                const panelRow = document.createElement('div');
-                panelRow.className = 'panel-row';
-                
-                // Align with row
-                const actionBar = row.querySelector('.row-action-bar');
-                const thumbContainer = row.querySelector('.thumbnails-container');
-                const totalHeight = (actionBar ? actionBar.offsetHeight : 0) + (thumbContainer ? thumbContainer.offsetHeight : 0) + 1;
-                panelRow.style.height = totalHeight + 'px';
+            const videoCats = videoCategories.get(selectedVideoKey) || new Set();
+            const projCats = projectCategories.get(projectPath) || new Set();
 
-                const catListDiv = document.createElement('div');
-                catListDiv.className = 'panel-video-cats';
+            // Header for selected video
+            const header = document.createElement('div');
+            header.className = 'panel-section-title';
+            header.style.color = 'var(--date-text-color)';
+            header.textContent = videoName;
+            panelContent.appendChild(header);
 
-                if (sortedInPlay.length === 0) {
-                    const none = document.createElement('div');
-                    none.style.color = '#888';
-                    none.style.fontStyle = 'italic';
-                    none.textContent = 'No active categories';
-                    catListDiv.appendChild(none);
-                } else {
-                    sortedInPlay.forEach(cat => {
-                        const item = document.createElement('div');
-                        item.className = 'panel-cat-item';
-                        
-                        const cb = document.createElement('input');
-                        cb.type = 'checkbox';
-                        cb.checked = videoCats.has(cat);
-                        cb.onchange = (e) => {
-                            e.stopPropagation();
-                            toggleVideoCategory(cat, cb.checked, videoKey, projPath);
-                        };
-                        
-                        const label = document.createElement('label');
-                        label.textContent = cat;
-                        label.style.cursor = 'pointer';
-                        label.onclick = (e) => {
-                            e.stopPropagation();
-                            cb.click();
-                        };
+            // Add Category UI
+            const addContainer = document.createElement('div');
+            addContainer.style.position = 'relative';
 
-                        item.appendChild(cb);
-                        item.appendChild(label);
-                        catListDiv.appendChild(item);
-                    });
+            const addBtn = document.createElement('button');
+            addBtn.className = 'bar-button';
+            addBtn.textContent = 'Add';
+            addBtn.style.width = '100%';
+            addBtn.style.backgroundColor = '#43a047';
+
+            const dropdown = document.createElement('div');
+            dropdown.id = 'panel-add-dropdown';
+
+            const showNewInput = () => {
+                dropdown.style.display = 'none';
+                const inputRow = document.createElement('div');
+                inputRow.className = 'new-cat-input-row';
+                inputRow.style.display = 'flex';
+                inputRow.style.gap = '5px';
+                inputRow.style.marginTop = '5px';
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = 'New category...';
+                input.style.flexGrow = '1';
+                input.style.padding = '4px';
+                input.style.backgroundColor = '#333';
+                input.style.color = 'white';
+                input.style.border = '1px solid #555';
+
+                const createBtn = document.createElement('button');
+                createBtn.className = 'bar-button';
+                createBtn.textContent = 'Create';
+                createBtn.style.backgroundColor = '#43a047';
+                createBtn.onclick = (ev) => {
+                    ev.stopPropagation();
+                    const name = input.value.trim();
+                    if (name) {
+                        toggleVideoCategory(name, true, selectedVideoKey, projectPath);
+                    }
+                };
+
+                inputRow.appendChild(input);
+                inputRow.appendChild(createBtn);
+                inputRow.onclick = (ev) => ev.stopPropagation();
+                addContainer.appendChild(inputRow);
+                input.focus();
+            };
+
+            const newItem = document.createElement('div');
+            newItem.className = 'panel-dropdown-item';
+            newItem.textContent = 'New';
+            newItem.onclick = (ev) => {
+                ev.stopPropagation();
+                showNewInput();
+            };
+            dropdown.appendChild(newItem);
+
+            const globalCats = Array.from(globalSavedCategories).filter(cat => !projCats.has(cat)).sort();
+            if (globalCats.length > 0) {
+                const sep = document.createElement('div');
+                sep.className = 'panel-dropdown-separator';
+                dropdown.appendChild(sep);
+
+                globalCats.forEach(cat => {
+                    const item = document.createElement('div');
+                    item.className = 'panel-dropdown-item';
+                    item.textContent = cat;
+                    item.onclick = (ev) => {
+                        ev.stopPropagation();
+                        toggleVideoCategory(cat, true, selectedVideoKey, projectPath);
+                        dropdown.style.display = 'none';
+                    };
+                    dropdown.appendChild(item);
+                });
+            }
+
+            addBtn.onclick = (ev) => {
+                ev.stopPropagation();
+                const isVisible = dropdown.style.display === 'block';
+                const existingInput = addContainer.querySelector('.new-cat-input-row');
+                if (existingInput) existingInput.remove();
+                dropdown.style.display = isVisible ? 'none' : 'block';
+            };
+
+            // Global click to hide dropdown
+            const hideDropdownHandler = (ev) => {
+                if (!addContainer.contains(ev.target)) {
+                    dropdown.style.display = 'none';
+                    const existingInput = addContainer.querySelector('.new-cat-input-row');
+                    if (existingInput) existingInput.remove();
+                    window.removeEventListener('click', hideDropdownHandler);
                 }
+            };
+            window.addEventListener('click', hideDropdownHandler);
 
-                panelRow.appendChild(catListDiv);
-                panelContent.appendChild(panelRow);
-            });
+            addContainer.appendChild(addBtn);
+            addContainer.appendChild(dropdown);
+            panelContent.appendChild(addContainer);
+
+            // Categories List
+            const listContainer = document.createElement('div');
+            listContainer.className = 'panel-cat-list';
+
+            const allProjectCats = Array.from(projCats).sort();
+            if (allProjectCats.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.color = '#888';
+                empty.style.fontSize = '12px';
+                empty.textContent = 'No categories in this project.';
+                listContainer.appendChild(empty);
+            } else {
+                allProjectCats.forEach(cat => {
+                    const item = document.createElement('div');
+                    item.className = 'panel-cat-item';
+
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.id = `panel-cb-${cat}`;
+                    cb.checked = videoCats.has(cat);
+                    cb.onchange = (ev) => {
+                        ev.stopPropagation();
+                        toggleVideoCategory(cat, cb.checked, selectedVideoKey, projectPath);
+                    };
+
+                    const label = document.createElement('label');
+                    label.htmlFor = `panel-cb-${cat}`;
+                    label.textContent = cat;
+                    label.title = cat;
+
+                    item.appendChild(cb);
+                    item.appendChild(label);
+                    listContainer.appendChild(item);
+                });
+            }
+            panelContent.appendChild(listContainer);
         }
+
 
         // Editor Helper Functions
         function editorTimeToFrame(time) {
@@ -1240,61 +1339,23 @@
             editorScrubber.style.left = (p * 100) + '%';
         }
 
-        function renderCategories() {
-            categoriesList.innerHTML = '';
-            const projCats = projectCategories.get(categoryCurrentVideo.projectPath) || new Set();
-            const videoCats = videoCategories.get(categoryCurrentVideo.projectPath + '|' + categoryCurrentVideo.videoName) || new Set();
-
-            if (projCats.size === 0) {
-                categoriesList.innerHTML = '<div style="color: #888;">No categories yet.</div>';
-            } else {
-                Array.from(projCats).sort().forEach(cat => {
-                    const div = document.createElement('div');
-                    div.style.display = 'flex';
-                    div.style.alignItems = 'center';
-                    div.style.gap = '5px';
-                    div.style.padding = '2px 0';
-
-                    const cb = document.createElement('input');
-                    cb.type = 'checkbox';
-                    cb.id = `cat-cb-${cat}`;
-                    cb.checked = videoCats.has(cat);
-                    cb.onchange = () => {
-                        toggleVideoCategory(cat, cb.checked);
-                    };
-
-                    const lbl = document.createElement('label');
-                    lbl.htmlFor = `cat-cb-${cat}`;
-                    lbl.textContent = cat;
-                    lbl.style.cursor = 'pointer';
-
-                    div.appendChild(cb);
-                    div.appendChild(lbl);
-                    categoriesList.appendChild(div);
-                });
-            }
-
-            // Global categories dropdown
-            globalCategoriesDropdown.innerHTML = '<option value="">Select a saved category...</option>';
-            let hasNewGlobal = false;
-            Array.from(globalSavedCategories).sort().forEach(cat => {
-                if (!projCats.has(cat)) {
-                    const opt = document.createElement('option');
-                    opt.value = cat;
-                    opt.textContent = cat;
-                    globalCategoriesDropdown.appendChild(opt);
-                    hasNewGlobal = true;
-                }
-            });
-            globalCategoriesContainer.style.display = hasNewGlobal ? 'flex' : 'none';
-        }
 
         function toggleVideoCategory(catName, isAdded, videoKey = null, projectPath = null) {
-            const key = videoKey || (categoryCurrentVideo.projectPath + '|' + categoryCurrentVideo.videoName);
-            const projPath = projectPath || categoryCurrentVideo.projectPath;
+            const key = videoKey || selectedVideoKey;
+            if (!key) {
+                console.error("toggleVideoCategory: No key provided and no selectedVideoKey.");
+                return;
+            }
+
+            let projPath = projectPath;
+            if (projPath === null || projPath === undefined) {
+                const lastPipeIndex = key.lastIndexOf('|');
+                projPath = lastPipeIndex !== -1 ? key.substring(0, lastPipeIndex) : '';
+            }
 
             if (!videoCategories.has(key)) videoCategories.set(key, new Set());
             const cats = videoCategories.get(key);
+
             if (isAdded) {
                 cats.add(catName);
                 if (!projectCategories.has(projPath)) projectCategories.set(projPath, new Set());
@@ -1304,6 +1365,7 @@
             } else {
                 cats.delete(catName);
             }
+
             if (enableCategoriesPanelCheckbox.checked) {
                 renderCategoriesPanel();
             }
@@ -1431,12 +1493,6 @@
             topCategoriesDropdown.style.minWidth = '300px';
         }
 
-        function openCategoriesModal(videoName, projectPath, subfolder, projectName) {
-            categoryCurrentVideo = { videoName, projectPath, subfolder, projectName };
-            newCategoryInput.value = '';
-            renderCategories();
-            categoriesModal.style.display = 'flex';
-        }
 
         async function openVideoEditor(videoName, projectPath, subfolder, projectName) {
             const key = projectPath + '|' + videoName;
@@ -1485,27 +1541,6 @@
         }
 
         function init() {
-            closeCategoriesModal.onclick = () => {
-                categoriesModal.style.display = 'none';
-            };
-
-            addCategoryBtn.onclick = () => {
-                const catName = newCategoryInput.value.trim();
-                if (catName) {
-                    toggleVideoCategory(catName, true);
-                    newCategoryInput.value = '';
-                    renderCategories();
-                }
-            };
-
-            addGlobalCategoryBtn.onclick = () => {
-                const catName = globalCategoriesDropdown.value;
-                if (catName) {
-                    toggleVideoCategory(catName, true);
-                    renderCategories();
-                }
-            };
-
             closeEditorModal.addEventListener('click', () => {
                 editorModal.style.display = 'none';
                 editorMainVideo.pause();
@@ -1586,12 +1621,11 @@
 
                 const hasCuts = editorCurrentCuts.length > 0;
                 let markersChanged = editorMarkers.length > 0;
-                let finalRotation = initialRot;
-                let finalFlipped = editorCurrentAppliedFlip;
 
-                if (markersChanged) {
-                    const lastMarker = editorMarkers[editorMarkers.length - 1];
-                    finalRotation = lastMarker.rotation.toString();
+                // Determine final rotation from markers for processing
+                let finalRotation = initialRot;
+                if (editorMarkers.length > 0) {
+                    finalRotation = editorMarkers[editorMarkers.length - 1].rotation.toString();
                     if (editorMarkers.length === 1 && editorMarkers[0].frame === 0) {
                         if (finalRotation === initialRot) {
                             markersChanged = false;
@@ -1599,14 +1633,21 @@
                     }
                 }
 
-                // Goal: New commit entirely disregards/replaces the previous one.
+                let finalFlipped = editorCurrentAppliedFlip;
+
                 if (!selection) {
                     selection = {
                         videoName: editorCurrentVideo.videoName,
                         projectPath: editorCurrentVideo.projectPath,
                         subfolder: editorCurrentVideo.subfolder,
                         projectName: editorCurrentVideo.projectName,
-                        type: '', rotation: finalRotation, flipped: finalFlipped
+                        type: '',
+                        rotation: finalRotation,
+                        flipped: finalFlipped,
+                        visualRotation: initialRot,
+                        visualFlipped: initialFlipped,
+                        buttonRotationTouched: false,
+                        buttonFlipTouched: false
                     };
                     shortcutSelections.set(key, selection);
                 }
@@ -1616,9 +1657,9 @@
                 selection.rotation = finalRotation;
                 selection.flipped = finalFlipped;
                 selection.fps = editorEstimatedFPS;
+                // We do NOT update visualRotation or buttonRotationTouched here
                 
-                // Track if it was rotated in edit mode in THIS session
-                // Red icon appears if it has markers or if rotation was changed from 0 in editor
+                // Red icon appears if it has markers (indicates hard-edits)
                 selection.editModeRotated = (editorMarkers.length > 0);
 
                 // Close editor
@@ -1683,7 +1724,8 @@
                 'header-text-color': document.getElementById('header-text-color-picker'),
                 'row-number-color': document.getElementById('row-number-color-picker'),
                 'date-text-color': document.getElementById('date-text-color-picker'),
-                'playlist-sc-color': document.getElementById('playlist-sc-color-picker')
+                'playlist-sc-color': document.getElementById('playlist-sc-color-picker'),
+                'selected-cat-color': document.getElementById('selected-cat-color-picker')
             };
 
             // Load saved colors
@@ -1724,7 +1766,8 @@
                         'header-text-color': '#01ff01',
                         'row-number-color': '#fcfc01',
                         'date-text-color': '#01ffff',
-                        'playlist-sc-color': '#ff00ff'
+                        'playlist-sc-color': '#ff00ff',
+                        'selected-cat-color': '#ff0000'
                     };
                     Object.keys(defaults).forEach(id => {
                         const color = defaults[id];
@@ -2094,6 +2137,12 @@
             if (canvas && canvas.elements) {
                 canvas.elements.forEach(el => {
                     thumbnailContainer.appendChild(el);
+                    // Update selection outline for rows if this canvas contains the selected video
+                    if (el.classList && el.classList.contains('landscape-row')) {
+                        const videoName = el.dataset.videoName;
+                        const projectPath = el.dataset.projectPath;
+                        updateRowUI(el, videoName, projectPath);
+                    }
                 });
             }
 
@@ -2149,8 +2198,14 @@
             const key = projectPath + '|' + videoName;
             const selection = shortcutSelections.get(key);
             const type = selection ? selection.type : '';
-            const rotation = selection ? selection.rotation : "0";
-            const flipped = selection ? !!selection.flipped : false;
+            // Bug fix: use visual state for thumbnails, separate from processing state
+            const rotation = (selection && selection.visualRotation !== undefined) ? selection.visualRotation : (selection ? selection.rotation : "0");
+            const flipped = (selection && selection.visualFlipped !== undefined) ? selection.visualFlipped : (selection ? !!selection.flipped : false);
+
+            const actionBar = rowDiv.querySelector('.row-action-bar');
+            if (actionBar) {
+                actionBar.classList.toggle('selected-for-categories', key === selectedVideoKey);
+            }
 
             rowDiv.querySelectorAll('.thumbnail').forEach(t => {
                 t.classList.remove('selected-root-sc', 'selected-subfolder-sc', 'selected-both-sc', 'selected-delete-sc', 'selected-playlist-sc', 'selected-shortcut', 'flipped');
@@ -2182,6 +2237,21 @@
                     btn.classList.add('active');
                 }
             });
+
+            // Update red rotation icon
+            const nameSpan = rowDiv.querySelector('.row-video-name');
+            if (nameSpan) {
+                const existingIcon = nameSpan.querySelector('.red-rotation-icon');
+                const isEditRotated = editModeRotatedVideos.get(key) || (selection && selection.editModeRotated);
+                if (isEditRotated && !existingIcon) {
+                    const icon = document.createElement('span');
+                    icon.className = 'red-rotation-icon';
+                    icon.innerHTML = '&#10227;';
+                    nameSpan.insertBefore(icon, nameSpan.firstChild);
+                } else if (!isEditRotated && existingIcon) {
+                    existingIcon.remove();
+                }
+            }
 
             debouncedLayout();
         }
@@ -2222,12 +2292,22 @@
             const rotate = (delta) => {
                 let selection = shortcutSelections.get(key);
                 if (!selection) {
-                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0" };
+                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0", visualRotation: "0", visualFlipped: false };
                     shortcutSelections.set(key, selection);
                 }
+                if (selection.visualRotation === undefined) selection.visualRotation = selection.rotation || "0";
+
+                // Update processing state
                 let currentRot = parseInt(selection.rotation || "0");
                 let newRot = (currentRot + delta + 360) % 360;
                 selection.rotation = newRot.toString();
+
+                // Update visual state
+                let currentVisualRot = parseInt(selection.visualRotation || "0");
+                let newVisualRot = (currentVisualRot + delta + 360) % 360;
+                selection.visualRotation = newVisualRot.toString();
+
+                selection.buttonRotationTouched = true;
                 updateRowUI(rowDiv, videoName, projectPath);
             };
 
@@ -2257,11 +2337,13 @@
             const toggleFlip = () => {
                 let selection = shortcutSelections.get(key);
                 if (!selection) {
-                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0", flipped: false };
+                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0", flipped: false, visualRotation: "0", visualFlipped: false };
                     shortcutSelections.set(key, selection);
                 }
+                if (selection.visualFlipped === undefined) selection.visualFlipped = !!selection.flipped;
+
                 selection.flipped = !selection.flipped;
-                updateRowUI(rowDiv, videoName, projectPath);
+                selection.visualFlipped = !selection.visualFlipped; selection.buttonFlipTouched = true; updateRowUI(rowDiv, videoName, projectPath);
             };
             leftGroup.appendChild(createBtn('H Flip', toggleFlip));
 
@@ -2317,7 +2399,24 @@
             catBtn.title = 'Categories';
             catBtn.onclick = (e) => {
                 e.stopPropagation();
-                openCategoriesModal(videoName, projectPath, subfolder, projectName);
+                const oldKey = selectedVideoKey;
+                if (selectedVideoKey === key) {
+                    selectedVideoKey = null;
+                } else {
+                    selectedVideoKey = key;
+                    if (!enableCategoriesPanelCheckbox.checked) {
+                        enableCategoriesPanelCheckbox.checked = true;
+                        enableCategoriesPanelCheckbox.dispatchEvent(new Event('change'));
+                    }
+                }
+
+                if (oldKey) {
+                    const [oldProj, oldVid] = oldKey.split('|');
+                    const oldRow = document.querySelector(`.landscape-row[data-video-name="${oldVid}"][data-project-path="${oldProj}"]`);
+                    if (oldRow) updateRowUI(oldRow, oldVid, oldProj);
+                }
+                updateRowUI(rowDiv, videoName, projectPath);
+                renderCategoriesPanel();
             };
             leftGroup.appendChild(catBtn);
 
@@ -2451,9 +2550,12 @@
 
             if (isAuto) {
                 const firstThumb = document.querySelector('.thumbnail[data-original-width]');
-                const ow = firstThumb ? parseFloat(firstThumb.dataset.originalWidth) : 320;
-                const oh = firstThumb ? parseFloat(firstThumb.dataset.originalHeight) : 180;
-                const isRot90 = firstThumb ? (firstThumb.classList.contains('rotate-90') || firstThumb.classList.contains('rotate-270')) : false;
+                let ow = 320, oh = 180, isRot90 = false;
+                if (firstThumb) {
+                    ow = parseFloat(firstThumb.dataset.originalWidth) || 320;
+                    oh = parseFloat(firstThumb.dataset.originalHeight) || 180;
+                    isRot90 = firstThumb.classList.contains('rotate-90') || firstThumb.classList.contains('rotate-270');
+                }
                 const refW = isRot90 ? oh : ow;
 
                 // Available width for content inside thumbnails-container
@@ -2480,10 +2582,8 @@
                     const wrappers = element.querySelectorAll('.thumbnail-wrapper');
                     wrappers.forEach(wrapper => {
                         const thumb = wrapper.querySelector('.thumbnail');
-                        if (!thumb.dataset.originalWidth) return;
-                        
-                        const originalWidth = parseFloat(thumb.dataset.originalWidth);
-                        const originalHeight = parseFloat(thumb.dataset.originalHeight);
+                        const originalWidth = parseFloat(thumb.dataset.originalWidth) || 320;
+                        const originalHeight = parseFloat(thumb.dataset.originalHeight) || 180;
                         const scaledWidth = originalWidth * globalScale;
                         const scaledHeight = originalHeight * globalScale;
                         
@@ -3219,29 +3319,44 @@
                 const initial = initialShortcutSelections.get(key);
                 const isMoved = sel.targetProject && sel.targetProject !== sel.projectPath;
                 
-                const currentRot = sel.rotation || "0";
                 const initialRot = (initial && initial.rotation) || "0";
-                const currentFlipped = !!sel.flipped;
                 const initialFlipped = initial ? !!initial.flipped : false;
+
+                const hasCuts = sel.cuts && sel.cuts.length > 0;
+                let markersChanged = sel.markers && sel.markers.length > 0;
+                if (markersChanged && sel.markers.length === 1 && sel.markers[0].frame === 0) {
+                    if (sel.markers[0].rotation.toString() === initialRot) markersChanged = false;
+                }
+                const needsProcessing = hasCuts || markersChanged;
+
+                // For rotation_data.txt:
+                // If it's being processed (FFmpeg), the output file is upright (0 rotation)
+                // Otherwise, use rotation only if user touched toolbar buttons
+                let rotationToSave = initialRot;
+                let flipToSave = initialFlipped;
+
+                if (needsProcessing) {
+                    rotationToSave = "0";
+                    flipToSave = false;
+                } else {
+                    if (sel.buttonRotationTouched) rotationToSave = sel.rotation || "0";
+                    if (sel.buttonFlipTouched) flipToSave = !!sel.flipped;
+                }
 
                 const getVal = (r, f) => (f ? `${r}:flip` : r);
 
                 if (isMoved) {
-                    // Remove from source
                     getUpdate(sel.projectPath).toRemove.push(sel.videoName);
-                    // Add/Update in destination
-                    const rotationVal = getVal(currentRot, currentFlipped);
-                    if (rotationVal !== "0") {
-                        getUpdate(sel.targetProject).toAdd[sel.videoName] = rotationVal;
-                    }
+                    const val = getVal(rotationToSave, flipToSave);
+                    if (val !== "0") getUpdate(sel.targetProject).toAdd[sel.videoName] = val;
                 } else {
-                    // Not moved, check if rotation or flip changed
-                    if (currentRot !== initialRot || currentFlipped !== initialFlipped) {
-                        const rotationVal = getVal(currentRot, currentFlipped);
-                        if (rotationVal === "0") {
+                    const val = getVal(rotationToSave, flipToSave);
+                    const initialVal = getVal(initialRot, initialFlipped);
+                    if (val !== initialVal) {
+                        if (val === "0") {
                             getUpdate(sel.projectPath).toRemove.push(sel.videoName);
                         } else {
-                            getUpdate(sel.projectPath).toAdd[sel.videoName] = rotationVal;
+                            getUpdate(sel.projectPath).toAdd[sel.videoName] = val;
                         }
                     }
                 }
@@ -3346,14 +3461,21 @@
                 scriptLines.push('\$script:rotatedFiles = @{}');
                     
                 shortcutSelections.forEach((sel, key) => {
-                        const initial = initialShortcutSelections.get(key);
-                        const initialRot = (initial && initial.rotation) || "0";
+                    const initial = initialShortcutSelections.get(key);
+                    const initialRot = (initial && initial.rotation) || "0";
+
+                    const hasCuts = sel.cuts && sel.cuts.length > 0;
+                    let markersChanged = sel.markers && sel.markers.length > 0;
+                    if (markersChanged && sel.markers.length === 1 && sel.markers[0].frame === 0) {
+                        if (sel.markers[0].rotation.toString() === initialRot) markersChanged = false;
+                    }
+                    const needsProcessing = hasCuts || markersChanged;
+
+                    // Only include in Lua if button-touched AND not being hard-rotated
+                    if (sel.buttonRotationTouched && !needsProcessing) {
                         const currentRot = sel.rotation || "0";
-                        if (currentRot !== initialRot) {
-                            summaryActions.lua.push(`${sel.videoName}: Rotate ${initialRot}° -> ${currentRot}°`);
-                        }
-                        if (currentRot !== "0") {
-                            scriptLines.push(`\$script:rotatedFiles['${escapePSString(sel.videoName)}'] = ${currentRot}`);
+                        summaryActions.lua.push(`${sel.videoName}: Rotate ${initialRot}° -> ${currentRot}°`);
+                        scriptLines.push(`$script:rotatedFiles['${escapePSString(sel.videoName)}'] = ${currentRot}`);
                     }
                 });
 
@@ -3405,7 +3527,7 @@
                 const hasFlipChanges = Array.from(shortcutSelections.entries()).some(([key, sel]) => {
                     const initial = initialShortcutSelections.get(key);
                     const initialFlipped = initial ? !!initial.flipped : false;
-                    return !!sel.flipped !== initialFlipped;
+                    return sel.buttonFlipTouched;
                 });
 
                 if (hasFlipChanges || Array.from(shortcutSelections.values()).some(sel => sel.flipped)) {
@@ -3413,15 +3535,24 @@
                 scriptLines.push("\$flipLuaPath = 'C:\\Bridge\\misc\\tools\\mpv-x86_64-v3-20260418-git-4377cce\\portable_config\\scripts\\flip.lua'");
                 scriptLines.push('\$script:flippedFiles = @{}');
                     
-                    shortcutSelections.forEach((sel, key) => {
-                        const initial = initialShortcutSelections.get(key);
-                        const initialFlipped = initial ? !!initial.flipped : false;
-                        if (!!sel.flipped !== initialFlipped) {
-                            summaryActions.lua.push(`${sel.videoName}: H-Flip ${initialFlipped ? 'ON' : 'OFF'} -> ${sel.flipped ? 'ON' : 'OFF'}`);
-                        }
+                shortcutSelections.forEach((sel, key) => {
+                    const initial = initialShortcutSelections.get(key);
+                    const initialRot = (initial && initial.rotation) || "0";
+                    const initialFlipped = initial ? !!initial.flipped : false;
+
+                    const hasCuts = sel.cuts && sel.cuts.length > 0;
+                    let markersChanged = sel.markers && sel.markers.length > 0;
+                    if (markersChanged && sel.markers.length === 1 && sel.markers[0].frame === 0) {
+                        if (sel.markers[0].rotation.toString() === initialRot) markersChanged = false;
+                    }
+                    const needsProcessing = hasCuts || markersChanged;
+
+                    if (sel.buttonFlipTouched && !needsProcessing) {
+                        summaryActions.lua.push(`${sel.videoName}: H-Flip ${initialFlipped ? 'ON' : 'OFF'} -> ${sel.flipped ? 'ON' : 'OFF'}`);
                         if (sel.flipped) {
                             scriptLines.push(`\$script:flippedFiles['${escapePSString(sel.videoName)}'] = 'hflip'`);
                         }
+                    }
                 });
 
                 scriptLines.push('\$allFlips = @{}');
@@ -4044,7 +4175,7 @@
 
                         const rowDiv = document.createElement('div');
                         rowDiv.className = 'landscape-row';
-                        rowDiv.dataset.videoName = videoName;
+                        rowDiv.dataset.videoName = videoFile.name;
                         rowDiv.dataset.projectPath = project.path;
                         rowDiv.dataset.projectName = project.name;
 
@@ -4126,7 +4257,8 @@
                             const selectionData = { 
                                 videoName: videoFile.name, projectPath: project.path, subfolder: videoFile.subfolder,
                                 projectName: project.name,
-                                type: initialShortcutType || '', rotation: rotation, flipped: flipped
+                                type: initialShortcutType || '', rotation: rotation, flipped: flipped,
+                                visualRotation: rotation, visualFlipped: flipped, buttonRotationTouched: false, buttonFlipTouched: false, buttonFlipTouched: false
                             };
                             shortcutSelections.set(key, selectionData);
                             initialShortcutSelections.set(key, { 
@@ -4164,8 +4296,8 @@
                             e.stopPropagation();
                             const key = project.path + '|' + videoFile.name;
                             const selection = shortcutSelections.get(key);
-                            const activeRotation = (selection && selection.rotation) ? selection.rotation : rotation;
-                            const activeFlipped = (selection && selection.flipped) ? selection.flipped : false;
+                            const activeRotation = (selection && selection.visualRotation !== undefined) ? selection.visualRotation : (selection ? selection.rotation : rotation);
+                            const activeFlipped = (selection && selection.visualFlipped !== undefined) ? selection.visualFlipped : (selection ? !!selection.flipped : false);
                             playVideo(videoFile, activeRotation, activeFlipped);
                         });
 
@@ -4271,11 +4403,13 @@
                                 return aNum - bNum;
                             });
 
+                            let realVideoName = videoBaseName;
                             let videoDate = 'Unknown';
                             try {
                                 for await (const entry of subfolderHandle.values()) {
-                                    if (entry.kind === 'file' && entry.name.startsWith(videoBaseName)) {
+                                    if (entry.kind === 'file' && entry.name.toLowerCase().startsWith(videoBaseName.toLowerCase())) {
                                         const file = await entry.getFile();
+                                        realVideoName = file.name;
                                         videoDate = new Date(file.lastModified).toLocaleString();
                                         break;
                                     }
@@ -4284,7 +4418,7 @@
 
                             const rowDiv = document.createElement('div');
                             rowDiv.className = 'landscape-row';
-                            rowDiv.dataset.videoName = videoBaseName;
+                            rowDiv.dataset.videoName = realVideoName;
                             rowDiv.dataset.projectPath = subfolderName;
                             rowDiv.dataset.projectName = subfolderName;
 
@@ -4293,20 +4427,21 @@
                             dateInfo.textContent = `Created: ${videoDate}`;
                             rowDiv.appendChild(dateInfo);
 
-                            const rotData = projectRotationData.get(videoBaseName.toLowerCase()) || { rotation: "0", flipped: false };
+                            const rotData = projectRotationData.get(realVideoName.toLowerCase()) || { rotation: "0", flipped: false };
                             const rotation = rotData.rotation;
                             const flipped = rotData.flipped;
                             
                             if (rotation !== "0" || flipped) {
-                                const key = subfolderName + '|' + videoBaseName;
+                                const key = subfolderName + '|' + realVideoName;
                                 if (!shortcutSelections.has(key)) {
                                     shortcutSelections.set(key, {
-                                        videoName: videoBaseName,
+                                        videoName: realVideoName,
                                         projectPath: subfolderName,
                                         projectName: subfolderName,
                                         type: 'subfolder-sc', // default for sc-new
                                         rotation: rotation,
-                                        flipped: flipped
+                                        flipped: flipped,
+                                        visualRotation: rotation, visualFlipped: flipped, buttonRotationTouched: false, buttonFlipTouched: false, buttonFlipTouched: false
                                     });
                                     initialShortcutSelections.set(key, { 
                                         type: 'subfolder-sc', rotation: rotation, flipped: flipped, 
@@ -4315,7 +4450,7 @@
                                 }
                             }
 
-                            rowDiv.appendChild(createRowActionBar(videoBaseName, subfolderName, '', rowDiv, subfolderName));
+                            rowDiv.appendChild(createRowActionBar(realVideoName, subfolderName, '', rowDiv, subfolderName));
                             const thumbnailsContainer = document.createElement('div');
                             thumbnailsContainer.className = 'thumbnails-container';
                             rowDiv.appendChild(thumbnailsContainer);
@@ -4361,8 +4496,8 @@
                                     if (videoFile) {
                                         const key = subfolderName + '|' + videoBaseName;
                                         const selection = shortcutSelections.get(key);
-                                        const activeRotation = (selection && selection.rotation) ? selection.rotation : rotation;
-                                        const activeFlipped = (selection && selection.flipped) ? selection.flipped : false;
+                                        const activeRotation = (selection && selection.visualRotation !== undefined) ? selection.visualRotation : (selection ? selection.rotation : rotation);
+                                        const activeFlipped = (selection && selection.visualFlipped !== undefined) ? selection.visualFlipped : (selection ? !!selection.flipped : false);
                                         playVideo(videoFile, activeRotation, activeFlipped);
                                     }
                                 });
@@ -4639,8 +4774,8 @@
 
                             img.addEventListener('click', (e) => {
                                 e.stopPropagation();
-                                const activeRotation = (selection && selection.rotation) ? selection.rotation : "0";
-                                const activeFlipped = (selection && selection.flipped) ? selection.flipped : false;
+                                const activeRotation = (selection && selection.visualRotation !== undefined) ? selection.visualRotation : (selection ? selection.rotation : "0");
+                                const activeFlipped = (selection && selection.visualFlipped !== undefined) ? selection.visualFlipped : (selection ? !!selection.flipped : false);
                                 playVideo(videoFile, activeRotation, activeFlipped);
                             });
 
@@ -4816,7 +4951,17 @@
                     const escapedProjectPath = escapePSString(sel.projectPath);
                     const escapedSubfolder = escapePSString(sel.subfolder);
                     const multiplier = sel.multiplier || 1;
-                    const rotation = sel.rotation || "0";
+
+                    const initial = initialShortcutSelections.get(sel.projectPath + '|' + sel.videoName);
+                    const initialRot = (initial && initial.rotation) || "0";
+                    const hasCuts = sel.cuts && sel.cuts.length > 0;
+                    let markersChanged = sel.markers && sel.markers.length > 0;
+                    if (markersChanged && sel.markers.length === 1 && sel.markers[0].frame === 0) {
+                        if (sel.markers[0].rotation.toString() === initialRot) markersChanged = false;
+                    }
+                    const needsProcessing = hasCuts || markersChanged;
+
+                    const rotation = (sel.buttonRotationTouched && !needsProcessing) ? (sel.rotation || "0") : "0";
 
                     if (currentMode === 'update-playlist-root') {
                         summaryActions.shortcuts_verify.push(`${sel.videoName} (for Playlist)`);
