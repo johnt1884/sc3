@@ -1058,6 +1058,7 @@
             const showNewInput = () => {
                 dropdown.style.display = 'none';
                 const inputRow = document.createElement('div');
+                inputRow.className = 'new-cat-input-row';
                 inputRow.style.display = 'flex';
                 inputRow.style.gap = '5px';
                 inputRow.style.marginTop = '5px';
@@ -1075,15 +1076,18 @@
                 createBtn.className = 'bar-button';
                 createBtn.textContent = 'Create';
                 createBtn.style.backgroundColor = '#43a047';
-                createBtn.onclick = () => {
+                createBtn.onclick = (ev) => {
+                    ev.stopPropagation();
                     const name = input.value.trim();
                     if (name) {
                         toggleVideoCategory(name, true, selectedVideoKey, projectPath);
+                        renderCategoriesPanel();
                     }
                 };
 
                 inputRow.appendChild(input);
                 inputRow.appendChild(createBtn);
+                inputRow.onclick = (ev) => ev.stopPropagation();
                 addContainer.appendChild(inputRow);
                 input.focus();
             };
@@ -1091,8 +1095,8 @@
             const newItem = document.createElement('div');
             newItem.className = 'panel-dropdown-item';
             newItem.textContent = 'New';
-            newItem.onclick = (e) => {
-                e.stopPropagation();
+            newItem.onclick = (ev) => {
+                ev.stopPropagation();
                 showNewInput();
             };
             dropdown.appendChild(newItem);
@@ -1107,32 +1111,32 @@
                     const item = document.createElement('div');
                     item.className = 'panel-dropdown-item';
                     item.textContent = cat;
-                    item.onclick = (e) => {
-                        e.stopPropagation();
-                        // When adding a saved category to project, we also assign it to video
+                    item.onclick = (ev) => {
+                        ev.stopPropagation();
                         toggleVideoCategory(cat, true, selectedVideoKey, projectPath);
                         dropdown.style.display = 'none';
+                        renderCategoriesPanel();
                     };
                     dropdown.appendChild(item);
                 });
             }
 
-            addBtn.onclick = (e) => {
-                e.stopPropagation();
+            addBtn.onclick = (ev) => {
+                ev.stopPropagation();
                 const isVisible = dropdown.style.display === 'block';
-                // Close any existing inputs
-                const existingInput = addContainer.querySelector('div:not(#panel-add-dropdown)');
+                const existingInput = addContainer.querySelector('.new-cat-input-row');
                 if (existingInput) existingInput.remove();
-
                 dropdown.style.display = isVisible ? 'none' : 'block';
             };
 
-            // Global click to hide dropdown
-            const hideDropdown = () => {
-                dropdown.style.display = 'none';
-                window.removeEventListener('click', hideDropdown);
+            const globalHideDropdown = (ev) => {
+                if (!addContainer.contains(ev.target)) {
+                    dropdown.style.display = 'none';
+                    const existingInput = addContainer.querySelector('.new-cat-input-row');
+                    if (existingInput) existingInput.remove();
+                }
             };
-            window.addEventListener('click', hideDropdown);
+            window.addEventListener('click', globalHideDropdown, { once: true });
 
             addContainer.appendChild(addBtn);
             addContainer.appendChild(dropdown);
@@ -1158,9 +1162,9 @@
                     cb.type = 'checkbox';
                     cb.id = `panel-cb-${cat}`;
                     cb.checked = videoCats.has(cat);
-                    cb.onchange = (e) => {
-                        e.stopPropagation();
-                        toggleVideoCategory(cat, e.target.checked, selectedVideoKey, projectPath);
+                    cb.onchange = (ev) => {
+                        ev.stopPropagation();
+                        toggleVideoCategory(cat, cb.checked, selectedVideoKey, projectPath);
                     };
 
                     const label = document.createElement('label');
@@ -1329,12 +1333,15 @@
 
         function toggleVideoCategory(catName, isAdded, videoKey = null, projectPath = null) {
             const key = videoKey || selectedVideoKey;
-            if (!key) return;
+            if (!key) {
+                console.error("toggleVideoCategory: No key provided and no selectedVideoKey.");
+                return;
+            }
 
             let projPath = projectPath;
             if (projPath === null || projPath === undefined) {
-                const parts = key.split('|');
-                projPath = parts.slice(0, -1).join('|');
+                const lastPipeIndex = key.lastIndexOf('|');
+                projPath = lastPipeIndex !== -1 ? key.substring(0, lastPipeIndex) : '';
             }
 
             if (!videoCategories.has(key)) videoCategories.set(key, new Set());
@@ -1635,7 +1642,7 @@
                 selection.rotation = finalRotation;
                 selection.flipped = finalFlipped;
                 selection.fps = editorEstimatedFPS;
-                selection.toolbarRotated = false;
+                // Edit mode hard-rotates, so we do not set buttonRotationTouched here
                 
                 // Track if it was rotated in edit mode in THIS session
                 // Red icon appears if it has markers or if rotation was changed from 0 in editor
@@ -2261,7 +2268,7 @@
                 let currentRot = parseInt(selection.rotation || "0");
                 let newRot = (currentRot + delta + 360) % 360;
                 selection.rotation = newRot.toString();
-                selection.toolbarRotated = true;
+                selection.buttonRotationTouched = true;
                 updateRowUI(rowDiv, videoName, projectPath);
             };
 
@@ -3400,10 +3407,10 @@
                         const initial = initialShortcutSelections.get(key);
                         const initialRot = (initial && initial.rotation) || "0";
                         const currentRot = sel.rotation || "0";
-                        if (currentRot !== initialRot && sel.toolbarRotated) {
+                        if (sel.buttonRotationTouched) {
                             summaryActions.lua.push(`${sel.videoName}: Rotate ${initialRot}° -> ${currentRot}°`);
                         }
-                        if (currentRot !== "0" && sel.toolbarRotated) {
+                        if (sel.buttonRotationTouched) {
                             scriptLines.push(`\$script:rotatedFiles['${escapePSString(sel.videoName)}'] = ${currentRot}`);
                     }
                 });
@@ -4178,7 +4185,7 @@
                                 videoName: videoFile.name, projectPath: project.path, subfolder: videoFile.subfolder,
                                 projectName: project.name,
                                 type: initialShortcutType || '', rotation: rotation, flipped: flipped,
-                                toolbarRotated: (rotation !== "0")
+                                buttonRotationTouched: false
                             };
                             shortcutSelections.set(key, selectionData);
                             initialShortcutSelections.set(key, { 
@@ -4361,7 +4368,7 @@
                                         type: 'subfolder-sc', // default for sc-new
                                         rotation: rotation,
                                         flipped: flipped,
-                                        toolbarRotated: (rotation !== "0")
+                                        buttonRotationTouched: false
                                     });
                                     initialShortcutSelections.set(key, { 
                                         type: 'subfolder-sc', rotation: rotation, flipped: flipped, 
@@ -4871,7 +4878,7 @@
                     const escapedProjectPath = escapePSString(sel.projectPath);
                     const escapedSubfolder = escapePSString(sel.subfolder);
                     const multiplier = sel.multiplier || 1;
-                    const rotation = (sel.toolbarRotated && sel.rotation) ? sel.rotation : "0";
+                    const rotation = (sel.buttonRotationTouched && sel.rotation) ? sel.rotation : "0";
 
                     if (currentMode === 'update-playlist-root') {
                         summaryActions.shortcuts_verify.push(`${sel.videoName} (for Playlist)`);
