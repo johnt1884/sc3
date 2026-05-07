@@ -17,6 +17,7 @@
             --row-number-color: #fcfc01;
             --date-text-color: #01ffff;
             --playlist-sc-color: #ff00ff;
+            --selected-cat-color: #ff0000;
         }
         html, body {
             height: 100%;
@@ -69,7 +70,7 @@
         #categories-panel {
             display: none;
             width: 250px;
-            min-width: 100px;
+            min-width: 150px;
             max-width: 600px;
             background-color: var(--toolbar-color);
             border-left: 1px solid #444;
@@ -77,39 +78,42 @@
             overflow-x: hidden;
             position: relative;
             flex-shrink: 0;
+            padding: 10px;
+            box-sizing: border-box;
         }
         #panel-content {
             height: 100%;
-            overflow-y: scroll;
+            overflow-y: auto;
             overflow-x: hidden;
-            scrollbar-width: none; /* Firefox */
-        }
-        #panel-content::-webkit-scrollbar {
-            display: none; /* Chrome/Safari */
-        }
-        .panel-row {
-            border-bottom: 1px solid #444;
-            box-sizing: border-box;
             display: flex;
             flex-direction: column;
-            padding: 5px;
-            overflow: hidden;
+            gap: 15px;
         }
-        .panel-video-cats {
-            flex-grow: 1;
-            overflow-y: auto;
-            font-size: 12px;
-            color: #eee;
+        .panel-section-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--header-text-color);
+        }
+        .panel-cat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
         .panel-cat-item {
             display: flex;
             align-items: center;
-            gap: 5px;
-            padding: 2px 0;
-            white-space: nowrap;
+            gap: 8px;
+            font-size: 13px;
         }
         .panel-cat-item input {
             margin: 0;
+        }
+        .panel-cat-item label {
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         #panel-resizer {
             display: none;
@@ -245,6 +249,10 @@
             box-sizing: border-box;
             border-bottom: 1px solid #444444;
             border-top: 1px solid #444444;
+        }
+        .row-action-bar.selected-for-categories {
+            outline: 3px solid var(--selected-cat-color);
+            outline-offset: -3px;
         }
         .row-action-group-left {
             display: flex;
@@ -685,6 +693,10 @@
                                 <input type="color" id="playlist-sc-color-picker" value="#ff00ff">
                             </div>
                             <div class="options-row">
+                                <label for="selected-cat-color-picker">Category Selection Outline</label>
+                                <input type="color" id="selected-cat-color-picker" value="#ff0000">
+                            </div>
+                            <div class="options-row">
                                 <label for="enable-categories-panel-checkbox">Enable Categories Panel</label>
                                 <input type="checkbox" id="enable-categories-panel-checkbox">
                             </div>
@@ -815,34 +827,9 @@
         </div>
     </div>
 
-    <div id="categories-modal" class="modal">
-        <div class="modal-content">
-            <span class="close" id="close-categories-modal">&times;</span>
-            <h2>Categories</h2>
-            <div id="categories-list" style="margin-bottom: 20px; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
-                <!-- Category checkboxes will go here -->
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-                <input type="text" id="new-category-input" placeholder="New Category Name" style="flex-grow: 1; padding: 5px;">
-                <button id="add-category-btn" class="bar-button" style="background-color: #43a047;">Create & Add</button>
-            </div>
-            <div id="global-categories-container" style="display: none; align-items: center; gap: 10px;">
-                <label for="global-categories-dropdown">Saved Categories:</label>
-                <select id="global-categories-dropdown" style="flex-grow: 1; color: black; background-color: white; border: 1px solid #ccc;">
-                    <option value="">Select a saved category...</option>
-                </select>
-                <button id="add-global-category-btn" class="bar-button">Add</button>
-            </div>
-        </div>
-    </div>
 
     <script>
         const thumbnailContainer = document.getElementById('thumbnail-container');
-        thumbnailContainer.addEventListener('scroll', () => {
-            if (enableCategoriesPanelCheckbox.checked) {
-                panelContent.scrollTop = thumbnailContainer.scrollTop;
-            }
-        });
         const scriptModal = document.getElementById('script-modal');
         const batchScriptTextArea = document.getElementById('batch-script');
         const copyScriptBtn = document.getElementById('copy-script-btn');
@@ -894,14 +881,7 @@
         const editorRotRightBtn = document.getElementById('editor-rotRight');
         const editorVideoOverlay = document.getElementById('editor-videoOverlay');
         const editorFileInfo = document.getElementById('editor-fileInfo');
-        const categoriesModal = document.getElementById('categories-modal');
-        const closeCategoriesModal = document.getElementById('close-categories-modal');
-        const categoriesList = document.getElementById('categories-list');
-        const newCategoryInput = document.getElementById('new-category-input');
-        const addCategoryBtn = document.getElementById('add-category-btn');
-        const globalCategoriesContainer = document.getElementById('global-categories-container');
-        const globalCategoriesDropdown = document.getElementById('global-categories-dropdown');
-        const addGlobalCategoryBtn = document.getElementById('add-global-category-btn');
+        let selectedVideoKey = null;
 
         const prevCanvasBtn = document.getElementById('prev-canvas-btn');
         const nextCanvasBtn = document.getElementById('next-canvas-btn');
@@ -1020,74 +1000,93 @@
             if (!enableCategoriesPanelCheckbox.checked) return;
             panelContent.innerHTML = '';
             
-            if (!canvases.has(activeCanvasId)) return;
-            const canvas = canvases.get(activeCanvasId);
-            const projectPath = canvas.path;
-            
-            // Get all in-play categories for this directory
-            const inPlayCats = new Set();
-            const projectVideos = allVideoFiles.filter(v => v.projectPath === projectPath);
-            projectVideos.forEach(v => {
-                const cats = videoCategories.get(projectPath + '|' + v.name);
-                if (cats) cats.forEach(c => inPlayCats.add(c));
-            });
-            const sortedInPlay = Array.from(inPlayCats).sort();
+            if (!selectedVideoKey) {
+                panelContent.innerHTML = '<div style="color: #888; text-align: center; margin-top: 20px;">Click a video\'s category icon to select it.</div>';
+                return;
+            }
 
-            const rows = document.querySelectorAll('.landscape-row');
-            rows.forEach(row => {
-                const videoName = row.dataset.videoName;
-                const projPath = row.dataset.projectPath;
-                const videoKey = projPath + '|' + videoName;
-                const videoCats = videoCategories.get(videoKey) || new Set();
+            const [projectPath, videoName] = selectedVideoKey.split('|');
+            const videoCats = videoCategories.get(selectedVideoKey) || new Set();
+            const projCats = projectCategories.get(projectPath) || new Set();
 
-                const panelRow = document.createElement('div');
-                panelRow.className = 'panel-row';
-                
-                // Align with row
-                const actionBar = row.querySelector('.row-action-bar');
-                const thumbContainer = row.querySelector('.thumbnails-container');
-                const totalHeight = (actionBar ? actionBar.offsetHeight : 0) + (thumbContainer ? thumbContainer.offsetHeight : 0) + 1;
-                panelRow.style.height = totalHeight + 'px';
+            // Header for selected video
+            const header = document.createElement('div');
+            header.className = 'panel-section-title';
+            header.style.color = 'var(--date-text-color)';
+            header.textContent = videoName;
+            panelContent.appendChild(header);
 
-                const catListDiv = document.createElement('div');
-                catListDiv.className = 'panel-video-cats';
+            // New Category Creation
+            const newCatDiv = document.createElement('div');
+            newCatDiv.style.display = 'flex';
+            newCatDiv.style.flexDirection = 'column';
+            newCatDiv.style.gap = '5px';
 
-                if (sortedInPlay.length === 0) {
-                    const none = document.createElement('div');
-                    none.style.color = '#888';
-                    none.style.fontStyle = 'italic';
-                    none.textContent = 'No active categories';
-                    catListDiv.appendChild(none);
-                } else {
-                    sortedInPlay.forEach(cat => {
-                        const item = document.createElement('div');
-                        item.className = 'panel-cat-item';
-                        
-                        const cb = document.createElement('input');
-                        cb.type = 'checkbox';
-                        cb.checked = videoCats.has(cat);
-                        cb.onchange = (e) => {
-                            e.stopPropagation();
-                            toggleVideoCategory(cat, cb.checked, videoKey, projPath);
-                        };
-                        
-                        const label = document.createElement('label');
-                        label.textContent = cat;
-                        label.style.cursor = 'pointer';
-                        label.onclick = (e) => {
-                            e.stopPropagation();
-                            cb.click();
-                        };
+            const inputRow = document.createElement('div');
+            inputRow.style.display = 'flex';
+            inputRow.style.gap = '5px';
 
-                        item.appendChild(cb);
-                        item.appendChild(label);
-                        catListDiv.appendChild(item);
-                    });
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = 'New category...';
+            input.style.flexGrow = '1';
+            input.style.padding = '4px';
+            input.style.backgroundColor = '#333';
+            input.style.color = 'white';
+            input.style.border = '1px solid #555';
+
+            const addBtn = document.createElement('button');
+            addBtn.className = 'bar-button';
+            addBtn.textContent = 'Add';
+            addBtn.style.backgroundColor = '#43a047';
+            addBtn.onclick = () => {
+                const name = input.value.trim();
+                if (name) {
+                    toggleVideoCategory(name, true, selectedVideoKey, projectPath);
+                    renderCategoriesPanel();
                 }
+            };
 
-                panelRow.appendChild(catListDiv);
-                panelContent.appendChild(panelRow);
-            });
+            inputRow.appendChild(input);
+            inputRow.appendChild(addBtn);
+            newCatDiv.appendChild(inputRow);
+            panelContent.appendChild(newCatDiv);
+
+            // Categories List
+            const listContainer = document.createElement('div');
+            listContainer.className = 'panel-cat-list';
+
+            const allAvailableCats = Array.from(new Set([...projCats, ...globalSavedCategories])).sort();
+            if (allAvailableCats.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.color = '#888';
+                empty.style.fontSize = '12px';
+                empty.textContent = 'No categories available.';
+                listContainer.appendChild(empty);
+            } else {
+                allAvailableCats.forEach(cat => {
+                    const item = document.createElement('div');
+                    item.className = 'panel-cat-item';
+
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.id = `panel-cb-${cat}`;
+                    cb.checked = videoCats.has(cat);
+                    cb.onchange = () => {
+                        toggleVideoCategory(cat, cb.checked, selectedVideoKey, projectPath);
+                    };
+
+                    const label = document.createElement('label');
+                    label.htmlFor = `panel-cb-${cat}`;
+                    label.textContent = cat;
+                    label.title = cat;
+
+                    item.appendChild(cb);
+                    item.appendChild(label);
+                    listContainer.appendChild(item);
+                });
+            }
+            panelContent.appendChild(listContainer);
         }
 
         // Editor Helper Functions
@@ -1290,8 +1289,9 @@
         }
 
         function toggleVideoCategory(catName, isAdded, videoKey = null, projectPath = null) {
-            const key = videoKey || (categoryCurrentVideo.projectPath + '|' + categoryCurrentVideo.videoName);
-            const projPath = projectPath || categoryCurrentVideo.projectPath;
+            const key = videoKey || (categoryCurrentVideo && (categoryCurrentVideo.projectPath + '|' + categoryCurrentVideo.videoName));
+            const projPath = projectPath || (categoryCurrentVideo && categoryCurrentVideo.projectPath);
+            if (!key || !projPath) return;
 
             if (!videoCategories.has(key)) videoCategories.set(key, new Set());
             const cats = videoCategories.get(key);
@@ -1431,12 +1431,6 @@
             topCategoriesDropdown.style.minWidth = '300px';
         }
 
-        function openCategoriesModal(videoName, projectPath, subfolder, projectName) {
-            categoryCurrentVideo = { videoName, projectPath, subfolder, projectName };
-            newCategoryInput.value = '';
-            renderCategories();
-            categoriesModal.style.display = 'flex';
-        }
 
         async function openVideoEditor(videoName, projectPath, subfolder, projectName) {
             const key = projectPath + '|' + videoName;
@@ -1485,27 +1479,6 @@
         }
 
         function init() {
-            closeCategoriesModal.onclick = () => {
-                categoriesModal.style.display = 'none';
-            };
-
-            addCategoryBtn.onclick = () => {
-                const catName = newCategoryInput.value.trim();
-                if (catName) {
-                    toggleVideoCategory(catName, true);
-                    newCategoryInput.value = '';
-                    renderCategories();
-                }
-            };
-
-            addGlobalCategoryBtn.onclick = () => {
-                const catName = globalCategoriesDropdown.value;
-                if (catName) {
-                    toggleVideoCategory(catName, true);
-                    renderCategories();
-                }
-            };
-
             closeEditorModal.addEventListener('click', () => {
                 editorModal.style.display = 'none';
                 editorMainVideo.pause();
@@ -1616,6 +1589,7 @@
                 selection.rotation = finalRotation;
                 selection.flipped = finalFlipped;
                 selection.fps = editorEstimatedFPS;
+                selection.toolbarRotated = false;
                 
                 // Track if it was rotated in edit mode in THIS session
                 // Red icon appears if it has markers or if rotation was changed from 0 in editor
@@ -1683,7 +1657,8 @@
                 'header-text-color': document.getElementById('header-text-color-picker'),
                 'row-number-color': document.getElementById('row-number-color-picker'),
                 'date-text-color': document.getElementById('date-text-color-picker'),
-                'playlist-sc-color': document.getElementById('playlist-sc-color-picker')
+                'playlist-sc-color': document.getElementById('playlist-sc-color-picker'),
+                'selected-cat-color': document.getElementById('selected-cat-color-picker')
             };
 
             // Load saved colors
@@ -1724,7 +1699,8 @@
                         'header-text-color': '#01ff01',
                         'row-number-color': '#fcfc01',
                         'date-text-color': '#01ffff',
-                        'playlist-sc-color': '#ff00ff'
+                        'playlist-sc-color': '#ff00ff',
+                        'selected-cat-color': '#ff0000'
                     };
                     Object.keys(defaults).forEach(id => {
                         const color = defaults[id];
@@ -2152,6 +2128,11 @@
             const rotation = selection ? selection.rotation : "0";
             const flipped = selection ? !!selection.flipped : false;
 
+            const actionBar = rowDiv.querySelector('.row-action-bar');
+            if (actionBar) {
+                actionBar.classList.toggle('selected-for-categories', key === selectedVideoKey);
+            }
+
             rowDiv.querySelectorAll('.thumbnail').forEach(t => {
                 t.classList.remove('selected-root-sc', 'selected-subfolder-sc', 'selected-both-sc', 'selected-delete-sc', 'selected-playlist-sc', 'selected-shortcut', 'flipped');
                 t.classList.remove('rotate-90', 'rotate-180', 'rotate-270');
@@ -2228,6 +2209,7 @@
                 let currentRot = parseInt(selection.rotation || "0");
                 let newRot = (currentRot + delta + 360) % 360;
                 selection.rotation = newRot.toString();
+                selection.toolbarRotated = true;
                 updateRowUI(rowDiv, videoName, projectPath);
             };
 
@@ -2317,7 +2299,24 @@
             catBtn.title = 'Categories';
             catBtn.onclick = (e) => {
                 e.stopPropagation();
-                openCategoriesModal(videoName, projectPath, subfolder, projectName);
+                const oldKey = selectedVideoKey;
+                if (selectedVideoKey === key) {
+                    selectedVideoKey = null;
+                } else {
+                    selectedVideoKey = key;
+                    if (!enableCategoriesPanelCheckbox.checked) {
+                        enableCategoriesPanelCheckbox.checked = true;
+                        enableCategoriesPanelCheckbox.dispatchEvent(new Event('change'));
+                    }
+                }
+
+                if (oldKey) {
+                    const [oldProj, oldVid] = oldKey.split('|');
+                    const oldRow = document.querySelector(`.landscape-row[data-video-name="${oldVid}"][data-project-path="${oldProj}"]`);
+                    if (oldRow) updateRowUI(oldRow, oldVid, oldProj);
+                }
+                updateRowUI(rowDiv, videoName, projectPath);
+                renderCategoriesPanel();
             };
             leftGroup.appendChild(catBtn);
 
@@ -3349,10 +3348,10 @@
                         const initial = initialShortcutSelections.get(key);
                         const initialRot = (initial && initial.rotation) || "0";
                         const currentRot = sel.rotation || "0";
-                        if (currentRot !== initialRot) {
+                        if (currentRot !== initialRot && sel.toolbarRotated) {
                             summaryActions.lua.push(`${sel.videoName}: Rotate ${initialRot}° -> ${currentRot}°`);
                         }
-                        if (currentRot !== "0") {
+                        if (currentRot !== "0" && sel.toolbarRotated) {
                             scriptLines.push(`\$script:rotatedFiles['${escapePSString(sel.videoName)}'] = ${currentRot}`);
                     }
                 });
@@ -4126,7 +4125,8 @@
                             const selectionData = { 
                                 videoName: videoFile.name, projectPath: project.path, subfolder: videoFile.subfolder,
                                 projectName: project.name,
-                                type: initialShortcutType || '', rotation: rotation, flipped: flipped
+                                type: initialShortcutType || '', rotation: rotation, flipped: flipped,
+                                toolbarRotated: (rotation !== "0")
                             };
                             shortcutSelections.set(key, selectionData);
                             initialShortcutSelections.set(key, { 
@@ -4306,7 +4306,8 @@
                                         projectName: subfolderName,
                                         type: 'subfolder-sc', // default for sc-new
                                         rotation: rotation,
-                                        flipped: flipped
+                                        flipped: flipped,
+                                        toolbarRotated: (rotation !== "0")
                                     });
                                     initialShortcutSelections.set(key, { 
                                         type: 'subfolder-sc', rotation: rotation, flipped: flipped, 
@@ -4816,7 +4817,7 @@
                     const escapedProjectPath = escapePSString(sel.projectPath);
                     const escapedSubfolder = escapePSString(sel.subfolder);
                     const multiplier = sel.multiplier || 1;
-                    const rotation = sel.rotation || "0";
+                    const rotation = (sel.toolbarRotated && sel.rotation) ? sel.rotation : "0";
 
                     if (currentMode === 'update-playlist-root') {
                         summaryActions.shortcuts_verify.push(`${sel.videoName} (for Playlist)`);
